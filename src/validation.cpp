@@ -2899,14 +2899,14 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
                     return true;
                 }, CMnVotePerCycle{propId, prop.cycle});
 
-                auto valid = lround(voters * 10000.f / activeMasternodes.size()) >= chainparams.GetConsensus().props.minVoting;
+                auto valid = lround(voters * 10000.f / activeMasternodes.size()) > chainparams.GetConsensus().props.minVoting;
                 if (valid) {
                     uint32_t majorityThreshold;
                     switch(prop.type) {
                         case CPropType::CommunityFundRequest:
                             majorityThreshold = chainparams.GetConsensus().props.cfp.majorityThreshold;
                             break;
-                        case CPropType::BlockRewardRellocation:
+                        case CPropType::BlockRewardReallocation:
                             majorityThreshold = chainparams.GetConsensus().props.brp.majorityThreshold;
                             break;
                         case CPropType::VoteOfConfidence:
@@ -2915,7 +2915,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
                         default:
                             assert(false);
                     }
-                    auto approved = lround(voteYes * 10000.f / voters) >= majorityThreshold;
+                    auto approved = lround(voteYes * 10000.f / voters) > majorityThreshold;
                     if (approved) {
                         if (prop.nCycles == prop.cycle) {
                             cache.UpdatePropStatus(propId, pindex->nHeight, CPropStatusType::Completed);
