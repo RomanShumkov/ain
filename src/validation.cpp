@@ -1663,9 +1663,13 @@ DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockI
     // special case: possible undo (first) of custom 'complex changes' for the whole block (expired orders and/or prices)
     mnview.OnUndoTx(uint256(), (uint32_t) pindex->nHeight); // undo for "zero hash"
 
+    pburnHistoryDB->EraseAccountHistoryHeight(pindex->nHeight);
+    if (paccountHistoryDB) {
+        paccountHistoryDB->EraseAccountHistoryHeight(pindex->nHeight);
+    }
+
     if (pindex->nHeight >= Params().GetConsensus().FortCanningHeight) {
         // erase auction fee history
-        pburnHistoryDB->EraseAccountHistory({Params().GetConsensus().burnAddress, uint32_t(pindex->nHeight), ~0u});
         if (paccountHistoryDB) {
             paccountHistoryDB->EraseAuctionHistoryHeight(pindex->nHeight);
         }
@@ -1756,7 +1760,7 @@ DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockI
                 // Check for burn outputs
                 if (tx.vout[o].scriptPubKey == Params().GetConsensus().burnAddress)
                 {
-                    eraseBurnEntries.push_back({Params().GetConsensus().burnAddress, static_cast<uint32_t>(pindex->nHeight), static_cast<uint32_t>(i)});
+                    eraseBurnEntries.push_back({static_cast<uint32_t>(pindex->nHeight), Params().GetConsensus().burnAddress, static_cast<uint32_t>(i)});
                 }
             }
         }
@@ -1780,11 +1784,6 @@ DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockI
 
         // process transactions revert for masternodes
         mnview.OnUndoTx(tx.GetHash(), (uint32_t) pindex->nHeight);
-        CHistoryErasers erasers{paccountHistoryDB.get(), pburnHistoryDB.get(), pvaultHistoryDB.get()};
-        auto res = RevertCustomTx(mnview, view, tx, Params().GetConsensus(), (uint32_t) pindex->nHeight, i, erasers);
-        if (!res) {
-            LogPrintf("%s\n", res.msg);
-        }
     }
 
     // one time downgrade to revert CInterestRateV2 structure
@@ -1816,11 +1815,11 @@ DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockI
             return false;
         };
 
-        AccountHistoryKey startKey({Params().GetConsensus().burnAddress, static_cast<uint32_t>(Params().GetConsensus().EunosHeight), std::numeric_limits<uint32_t>::max()});
+        AccountHistoryKey startKey({static_cast<uint32_t>(Params().GetConsensus().EunosHeight), Params().GetConsensus().burnAddress, std::numeric_limits<uint32_t>::max()});
         pburnHistoryDB->ForEachAccountHistory(shouldContinueToNextAccountHistory, startKey);
 
         for (uint32_t i = block.vtx.size(); i <= lastTxOut; ++i) {
-            pburnHistoryDB->EraseAccountHistory({Params().GetConsensus().burnAddress, static_cast<uint32_t>(Params().GetConsensus().EunosHeight), i});
+            pburnHistoryDB->EraseAccountHistory({static_cast<uint32_t>(Params().GetConsensus().EunosHeight), Params().GetConsensus().burnAddress, i});
         }
     }
 
@@ -2633,7 +2632,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
         {
             if (tx.vout[j].scriptPubKey == Params().GetConsensus().burnAddress)
             {
-                writeBurnEntries.push_back({{Params().GetConsensus().burnAddress, static_cast<uint32_t>(pindex->nHeight), i},
+                writeBurnEntries.push_back({{static_cast<uint32_t>(pindex->nHeight), Params().GetConsensus().burnAddress, i},
                                             {block.vtx[i]->GetHash(), static_cast<uint8_t>(CustomTxType::None), {{DCT_ID{0}, tx.vout[j].nValue}}}});
             }
         }
@@ -2806,7 +2805,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
                     cache.AddBalance(chainparams.GetConsensus().burnAddress, {subItem.first, subItem.second});
 
                     // Add transfer as additional TX in block
-                     pburnHistoryDB->WriteAccountHistory({Params().GetConsensus().burnAddress, static_cast<uint32_t>(pindex->nHeight), GetNextBurnPosition()},
+                    pburnHistoryDB->WriteAccountHistory({static_cast<uint32_t>(pindex->nHeight), Params().GetConsensus().burnAddress, GetNextBurnPosition()},
                                                         {uint256{}, static_cast<uint8_t>(CustomTxType::AccountToAccount), {{subItem.first, subItem.second}}});
                 }
                 else // Log burn failure
@@ -3435,7 +3434,8 @@ bool CChainState::FlushStateToDisk(
                 return AbortNode(state, "Disk space is too low!", _("Error: Disk space is too low!").translated, CClientUIInterface::MSG_NOPREFIX);
             }
             // Flush the chainstate (which may refer to block index entries).
-            if (!CoinsTip().Flush() || !pcustomcsDB->Flush()) {
+            bool dbSync = mode == FlushStateMode::ALWAYS;
+            if (!CoinsTip().Flush() || !pcustomcsDB->Flush(dbSync)) {
                 return AbortNode(state, "Failed to write to coin or masternode db to disk");
             }
             if (!compactBegin.empty() && !compactEnd.empty()) {

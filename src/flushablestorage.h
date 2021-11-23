@@ -71,9 +71,10 @@ public:
     virtual bool Erase(const TBytes& key) = 0;
     virtual bool Read(const TBytes& key, TBytes& value) const = 0;
     virtual std::unique_ptr<CStorageKVIterator> NewIterator() = 0;
+    virtual void Compact(const TBytes& begin, const TBytes& end) = 0;
     virtual size_t SizeEstimate() const = 0;
+    virtual bool Flush(bool) = 0;
     virtual void Discard() = 0;
-    virtual bool Flush() = 0;
 };
 
 // doesn't serialize/deserialize vector size
@@ -155,8 +156,8 @@ public:
         auto rawVal = refTBytes(value);
         return db.Read(refTBytes(key), rawVal);
     }
-    bool Flush() override { // Commit batch
-        auto result = db.WriteBatch(batch);
+    bool Flush(bool sync) override { // Commit batch
+        auto result = db.WriteBatch(batch, sync);
         batch.Clear();
         return result;
     }
@@ -169,7 +170,7 @@ public:
     std::unique_ptr<CStorageKVIterator> NewIterator() override {
         return std::make_unique<CStorageLevelDBIterator>(std::unique_ptr<CDBIterator>(db.NewIterator()));
     }
-    void Compact(const TBytes& begin, const TBytes& end) {
+    void Compact(const TBytes& begin, const TBytes& end) override {
         db.CompactRange(refTBytes(begin), refTBytes(end));
     }
     bool IsEmpty() {
@@ -298,7 +299,7 @@ public:
             return false;
         }
     }
-    bool Flush() override {
+    bool Flush(bool) override {
         for (const auto& it : changed) {
             if (!it.second) {
                 if (!db.Erase(it.first)) {
@@ -319,6 +320,14 @@ public:
     }
     std::unique_ptr<CStorageKVIterator> NewIterator() override {
         return std::make_unique<CFlushableStorageKVIterator>(db.NewIterator(), changed);
+    }
+    void Compact(const TBytes& begin, const TBytes& end) override {
+        if (changed.key_comp()(begin, end)) {
+            auto first = changed.find(begin);
+            if (first != changed.end()) {
+                changed.erase(first, changed.upper_bound(end));
+            }
+        }
     }
 
     MapKV& GetRaw() {
@@ -489,6 +498,16 @@ public:
             return {result};
         return {};
     }
+
+    template<typename KeyType>
+    void Compact(const KeyType& begin, const KeyType& end) {
+        DB().Compact(DbTypeToBytes(begin), DbTypeToBytes(end));
+    }
+    template<typename By, typename KeyType>
+    void CompactBy(const KeyType& begin, const KeyType& end) {
+        Compact(std::make_pair(By::prefix(), begin), std::make_pair(By::prefix(), end));
+    }
+
     template<typename By, typename KeyType>
     CStorageIteratorWrapper<By, KeyType> LowerBound(KeyType const & key) {
         CStorageIteratorWrapper<By, KeyType> it{DB().NewIterator()};
@@ -504,8 +523,8 @@ public:
         }
     }
 
-    bool Flush() { return DB().Flush(); }
     void Discard() { DB().Discard(); }
+    bool Flush(bool sync = false) { return DB().Flush(sync); }
     size_t SizeEstimate() const { return DB().SizeEstimate(); }
 
 protected:

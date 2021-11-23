@@ -8,6 +8,73 @@
 #include <masternodes/vaulthistory.h>
 #include <key_io.h>
 
+struct AccountHistoryKeyOld {
+    CScript owner;
+    uint32_t blockHeight;
+    uint32_t txn;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(owner);
+
+        if (ser_action.ForRead()) {
+            READWRITE(WrapBigEndian(blockHeight));
+            blockHeight = ~blockHeight;
+            READWRITE(WrapBigEndian(txn));
+            txn = ~txn;
+        }
+        else {
+            uint32_t blockHeight_ = ~blockHeight;
+            READWRITE(WrapBigEndian(blockHeight_));
+            uint32_t txn_ = ~txn;
+            READWRITE(WrapBigEndian(txn_));
+        }
+    }
+};
+
+constexpr int CAccountsHistoryView::DbVersion;
+
+void CAccountsHistoryView::MigrateHistoryIfNeeded()
+{
+    int version;
+    if (Read(ByAccountHistoryDb::prefix(), version) && version == DbVersion) {
+        return;
+    }
+
+    AccountHistoryKeyOld beginKey{}, endKey{};
+    auto it = LowerBound<ByAccountHistoryOldKey>(beginKey);
+
+    bool needMigration = it.Valid();
+    if (needMigration) {
+        beginKey = it.Key();
+        LogPrintf("History migration in progress...\n");
+    }
+
+    auto startTime = GetTimeMillis();
+
+    for (; it.Valid(); it.Next()) {
+        endKey = it.Key();
+        const auto& key = endKey;
+        WriteAccountHistory({key.blockHeight, key.owner, key.txn}, it.Value());
+        EraseBy<ByAccountHistoryOldKey>(key); // erase old key
+    }
+
+    Write(ByAccountHistoryDb::prefix(), DbVersion);
+
+    bool dbSync = needMigration;
+    Flush(dbSync);
+
+    if (needMigration) {
+        CompactBy<ByAccountHistoryOldKey>(beginKey, endKey);
+    }
+
+    if (needMigration) {
+        LogPrint(BCLog::BENCH, "    - History migration took: %dms\n", GetTimeMillis() - startTime);
+    }
+}
+
 void CAccountsHistoryView::ForEachAccountHistory(std::function<bool(AccountHistoryKey const &, CLazySerialize<AccountHistoryValue>)> callback, AccountHistoryKey const & start)
 {
     ForEach<ByAccountHistoryKey, AccountHistoryKey, AccountHistoryValue>(callback, start);
@@ -22,6 +89,21 @@ Res CAccountsHistoryView::WriteAccountHistory(const AccountHistoryKey& key, cons
 Res CAccountsHistoryView::EraseAccountHistory(const AccountHistoryKey& key)
 {
     EraseBy<ByAccountHistoryKey>(key);
+    return Res::Ok();
+}
+
+Res CAccountsHistoryView::EraseAccountHistoryHeight(uint32_t height)
+{
+    std::vector<AccountHistoryKey> keysToDelete;
+
+    auto it = LowerBound<ByAccountHistoryKey>(AccountHistoryKey{height});
+    for (; it.Valid() && it.Key().blockHeight == height; it.Next()) {
+        keysToDelete.push_back(it.Key());
+    }
+
+    for (const auto& key : keysToDelete) {
+        EraseAccountHistory(key);
+    }
     return Res::Ok();
 }
 
@@ -70,79 +152,6 @@ bool CAccountsHistoryWriter::Flush()
     return CCustomCSView::Flush();
 }
 
-CAccountsHistoryEraser::CAccountsHistoryEraser(CCustomCSView & storage, uint32_t height, uint32_t txn, CHistoryErasers& erasers)
-    : CStorageView(new CFlushableStorageKV(static_cast<CStorageKV&>(storage.GetStorage()))), height(height), txn(txn), erasers(erasers)
-{
-}
-
-Res CAccountsHistoryEraser::AddBalance(CScript const & owner, CTokenAmount)
-{
-    erasers.AddBalance(owner, vaultID);
-    return Res::Ok();
-}
-
-Res CAccountsHistoryEraser::SubBalance(CScript const & owner, CTokenAmount)
-{
-    erasers.SubBalance(owner, vaultID);
-    return Res::Ok();
-}
-
-bool CAccountsHistoryEraser::Flush()
-{
-    erasers.Flush(height, txn, vaultID);
-    return Res::Ok(); // makes sure no changes are applyed to underlaying view
-}
-
-CHistoryErasers::CHistoryErasers(CAccountHistoryStorage* historyView, CBurnHistoryStorage* burnView, CVaultHistoryStorage* vaultView)
-    : historyView(historyView), burnView(burnView), vaultView(vaultView) {}
-
-void CHistoryErasers::AddBalance(const CScript& owner, const uint256& vaultID)
-{
-    if (historyView) {
-        accounts.insert(owner);
-    }
-    if (burnView && owner == Params().GetConsensus().burnAddress) {
-        burnAccounts.insert(owner);
-    }
-    if (vaultView && !vaultID.IsNull()) {
-        vaults.insert(vaultID);
-    }
-}
-
-void CHistoryErasers::SubFeeBurn(const CScript& owner)
-{
-    if (burnView) {
-        burnAccounts.insert(owner);
-    }
-}
-
-void CHistoryErasers::SubBalance(const CScript& owner, const uint256& vaultID)
-{
-    if (historyView) {
-        accounts.insert(owner);
-    }
-    if (burnView && owner == Params().GetConsensus().burnAddress) {
-        burnAccounts.insert(owner);
-    }
-    if (vaultView && !vaultID.IsNull()) {
-        vaults.insert(vaultID);
-    }
-}
-
-void CHistoryErasers::Flush(const uint32_t height, const uint32_t txn, const uint256& vaultID)
-{
-    if (historyView) {
-        for (const auto& account : accounts) {
-            historyView->EraseAccountHistory({account, height, txn});
-        }
-    }
-    if (burnView) {
-        for (const auto& account : burnAccounts) {
-            burnView->EraseAccountHistory({account, height, txn});
-        }
-    }
-}
-
 CHistoryWriters::CHistoryWriters(CAccountHistoryStorage* historyView, CBurnHistoryStorage* burnView, CVaultHistoryStorage* vaultView)
     : historyView(historyView), burnView(burnView), vaultView(vaultView) {}
 
@@ -183,12 +192,12 @@ void CHistoryWriters::Flush(const uint32_t height, const uint256& txid, const ui
 {
     if (historyView) {
         for (const auto& diff : diffs) {
-            historyView->WriteAccountHistory({diff.first, height, txn}, {txid, type, diff.second});
+            historyView->WriteAccountHistory({height, diff.first, txn}, {txid, type, diff.second});
         }
     }
     if (burnView) {
         for (const auto& diff : burnDiffs) {
-            burnView->WriteAccountHistory({diff.first, height, txn}, {txid, type, diff.second});
+            burnView->WriteAccountHistory({height, diff.first, txn}, {txid, type, diff.second});
         }
     }
     if (vaultView) {
