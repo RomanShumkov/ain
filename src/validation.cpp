@@ -3279,10 +3279,6 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
     }, pindex->nHeight);
 
     view.Flush();
-    pburnHistoryDB->Flush();
-    if (paccountHistoryDB) {
-        paccountHistoryDB->Flush();
-    }
 }
 
 void CChainState::ProcessOracleEvents(const CBlockIndex* pindex, CCustomCSView& cache, const CChainParams& chainparams){
@@ -3581,32 +3577,16 @@ bool CChainState::DisconnectTip(CValidationState& state, const CChainParams& cha
         assert(view.GetBestBlock() == pindexDelete->GetBlockHash());
         std::vector<CAnchorConfirmMessage> disconnectedConfirms;
         if (DisconnectBlock(block, pindexDelete, view, mnview, disconnectedConfirms) != DISCONNECT_OK) {
-            // no usable history
-            if (paccountHistoryDB) {
-                paccountHistoryDB->Discard();
-            }
-            if (pburnHistoryDB) {
-                pburnHistoryDB->Discard();
-            }
-            if (pvaultHistoryDB) {
-                pvaultHistoryDB->Discard();
-            }
             m_disconnectTip = false;
+            // no usable history
+            DiscardWriters(paccountHistoryDB.get(), pburnHistoryDB.get(), pvaultHistoryDB.get());
             return error("DisconnectTip(): DisconnectBlock %s failed", pindexDelete->GetBlockHash().ToString());
         }
         bool flushed = view.Flush() && mnview.Flush();
         assert(flushed);
 
         // flush history
-        if (paccountHistoryDB) {
-            paccountHistoryDB->Flush();
-        }
-        if (pburnHistoryDB) {
-            pburnHistoryDB->Flush();
-        }
-        if (pvaultHistoryDB) {
-            pvaultHistoryDB->Flush();
-        }
+        FlushWriters(paccountHistoryDB.get(), pburnHistoryDB.get(), pvaultHistoryDB.get());
 
         if (!disconnectedConfirms.empty()) {
             for (auto const & confirm : disconnectedConfirms) {
@@ -3752,15 +3732,7 @@ bool CChainState::ConnectTip(CValidationState& state, const CChainParams& chainp
                 InvalidBlockFound(pindexNew, state);
             }
             // no usable history
-            if (paccountHistoryDB) {
-                paccountHistoryDB->Discard();
-            }
-            if (pburnHistoryDB) {
-                pburnHistoryDB->Discard();
-            }
-            if (pvaultHistoryDB) {
-                pvaultHistoryDB->Discard();
-            }
+            DiscardWriters(paccountHistoryDB.get(), pburnHistoryDB.get(), pvaultHistoryDB.get());
             return error("%s: ConnectBlock %s failed, %s", __func__, pindexNew->GetBlockHash().ToString(), FormatStateMessage(state));
         }
         nTime3 = GetTimeMicros(); nTimeConnectTotal += nTime3 - nTime2;
@@ -3769,15 +3741,7 @@ bool CChainState::ConnectTip(CValidationState& state, const CChainParams& chainp
         assert(flushed);
 
         // flush history
-        if (paccountHistoryDB) {
-            paccountHistoryDB->Flush();
-        }
-        if (pburnHistoryDB) {
-            pburnHistoryDB->Flush();
-        }
-        if (pvaultHistoryDB) {
-            pvaultHistoryDB->Flush();
-        }
+        FlushWriters(paccountHistoryDB.get(), pburnHistoryDB.get(), pvaultHistoryDB.get());
 
         // anchor rewards re-voting etc...
         if (!rewardedAnchors.empty()) {

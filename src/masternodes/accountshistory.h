@@ -127,6 +127,34 @@ public:
     bool Flush();
 };
 
+inline void FlushWriters()
+{
+}
+
+template<typename T, typename... Args>
+inline void FlushWriters(T* writer, Args... args)
+{
+    static_assert(std::is_base_of<CStorageView, T>::value, "T should inherit CStorageView");
+    if (writer) {
+        writer->Flush();
+    }
+    FlushWriters(args...);
+}
+
+inline void DiscardWriters()
+{
+}
+
+template<typename T, typename... Args>
+inline void DiscardWriters(T* writer, Args... args)
+{
+    static_assert(std::is_base_of<CStorageView, T>::value, "T should inherit CStorageView");
+    if (writer) {
+        writer->Discard();
+    }
+    DiscardWriters(args...);
+}
+
 extern std::unique_ptr<CAccountHistoryStorage> paccountHistoryDB;
 extern std::unique_ptr<CBurnHistoryStorage> pburnHistoryDB;
 
