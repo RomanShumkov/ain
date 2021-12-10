@@ -447,7 +447,7 @@ class CCustomCSView
             CVaultView              ::  VaultKey, OwnerVaultKey, CollateralKey, AuctionBatchKey, AuctionHeightKey, AuctionBidKey
         >();
     }
-private:
+
     Res PopulateLoansData(CCollateralLoans& result, CVaultId const& vaultId, uint32_t height, int64_t blockTime, bool useNextPrice, bool requireLivePrice);
     Res PopulateCollateralData(CCollateralLoans& result, CVaultId const& vaultId, CBalances const& collaterals, uint32_t height, int64_t blockTime, bool useNextPrice, bool requireLivePrice);
 
@@ -473,6 +473,12 @@ public:
         CheckPrefixes();
     }
 
+    Res AddBalancePlusRewards(CScript const & owner, CTokenAmount amount, uint32_t height);
+    Res SubBalancePlusRewards(CScript const & owner, CTokenAmount amount, uint32_t height);
+
+    Res AddBalancesPlusRewards(CScript const & owner, CBalances const & balances, uint32_t height);
+    Res SubBalancesPlusRewards(CScript const & owner, CBalances const & balances, uint32_t height);
+
     // cause depends on current mns:
     CTeamView::CTeam CalcNextTeam(int height, uint256 const & stakeModifier);
 
@@ -487,7 +493,7 @@ public:
 
     bool CanSpend(const uint256 & txId, int height) const;
 
-    bool CalculateOwnerRewards(CScript const & owner, uint32_t height);
+    void CalculateOwnerRewards(CScript const & owner, uint32_t height);
 
     ResVal<CAmount> GetAmountInCurrency(CAmount amount, CTokenCurrencyPair priceFeedId, bool useNextPrice = false, bool requireLivePrice = true);
 

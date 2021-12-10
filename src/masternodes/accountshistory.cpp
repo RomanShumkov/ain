@@ -42,9 +42,9 @@ CAccountsHistoryWriter::CAccountsHistoryWriter(CCustomCSView & storage, uint32_t
 {
 }
 
-Res CAccountsHistoryWriter::AddBalance(CScript const & owner, CTokenAmount amount)
+Res CAccountsHistoryWriter::AddBalanceNoRewards(CScript const & owner, CTokenAmount amount)
 {
-    auto res = CCustomCSView::AddBalance(owner, amount);
+    auto res = CCustomCSView::AddBalanceNoRewards(owner, amount);
     if (writers && amount.nValue != 0 && res.ok) {
         writers->AddBalance(owner, amount, vaultID);
     }
@@ -52,9 +52,9 @@ Res CAccountsHistoryWriter::AddBalance(CScript const & owner, CTokenAmount amoun
     return res;
 }
 
-Res CAccountsHistoryWriter::SubBalance(CScript const & owner, CTokenAmount amount)
+Res CAccountsHistoryWriter::SubBalanceNoRewards(CScript const & owner, CTokenAmount amount)
 {
-    auto res = CCustomCSView::SubBalance(owner, amount);
+    auto res = CCustomCSView::SubBalanceNoRewards(owner, amount);
     if (writers && res.ok && amount.nValue != 0) {
         writers->SubBalance(owner, amount, vaultID);
     }
@@ -75,13 +75,13 @@ CAccountsHistoryEraser::CAccountsHistoryEraser(CCustomCSView & storage, uint32_t
 {
 }
 
-Res CAccountsHistoryEraser::AddBalance(CScript const & owner, CTokenAmount)
+Res CAccountsHistoryEraser::AddBalanceNoRewards(CScript const & owner, CTokenAmount)
 {
     erasers.AddBalance(owner, vaultID);
     return Res::Ok();
 }
 
-Res CAccountsHistoryEraser::SubBalance(CScript const & owner, CTokenAmount)
+Res CAccountsHistoryEraser::SubBalanceNoRewards(CScript const & owner, CTokenAmount)
 {
     erasers.SubBalance(owner, vaultID);
     return Res::Ok();

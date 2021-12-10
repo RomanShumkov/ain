@@ -284,7 +284,7 @@ class CCustomTxRevertVisitor
 
     Res EraseHistory(const CScript& owner) const {
         // notify account changes, no matter Sub or Add
-       return mnview.AddBalance(owner, {});
+       return mnview.AddBalanceNoRewards(owner, {});
     }
 
 public:
@@ -1062,13 +1062,6 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
         poolPrice = obj.maxPrice;
     }
 
-    if (!testOnly) {
-        CCustomCSView mnview(view);
-        mnview.CalculateOwnerRewards(obj.from, height);
-        mnview.CalculateOwnerRewards(obj.to, height);
-        mnview.Flush();
-    }
-
     // Set amount to be swapped in pool
     CTokenAmount swapAmountResult{obj.idTokenFrom, obj.amountFrom};
 
@@ -1135,14 +1128,14 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
             CCustomCSView intermediateView(view);
             // hide interemidiate swaps
             auto& subView = i == 0 ? view : intermediateView;
-            res = subView.SubBalance(obj.from, swapAmount);
+            res = subView.SubBalancePlusRewards(obj.from, swapAmount, height);
             if (!res) {
                 return res;
             }
             intermediateView.Flush();
 
             auto& addView = lastSwap ? view : intermediateView;
-            res = addView.AddBalance(lastSwap ? obj.to : obj.from, swapAmountResult);
+            res = addView.AddBalancePlusRewards(lastSwap ? obj.to : obj.from, swapAmountResult, height);
             if (!res) {
                 return res;
             }
@@ -1150,7 +1143,7 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
 
             // burn the dex in amount
             if (dexfeeInAmount.nValue > 0) {
-                res = view.AddBalance(Params().GetConsensus().burnAddress, dexfeeInAmount);
+                res = view.AddBalanceNoRewards(Params().GetConsensus().burnAddress, dexfeeInAmount);
                 if (!res) {
                     return res;
                 }
@@ -1158,7 +1151,7 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
 
             // burn the dex out amount
             if (dexfeeOutAmount.nValue > 0) {
-                res = view.AddBalance(Params().GetConsensus().burnAddress, dexfeeOutAmount);
+                res = view.AddBalanceNoRewards(Params().GetConsensus().burnAddress, dexfeeOutAmount);
                 if (!res) {
                     return res;
                 }
