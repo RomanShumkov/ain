@@ -134,7 +134,7 @@ public:
     CAccountsHistoryWriter(CCustomCSView & storage, uint32_t height, uint32_t txn, const uint256& txid, uint8_t type, CHistoryWriters* writers);
     Res AddBalance(CScript const & owner, CTokenAmount amount) override;
     Res SubBalance(CScript const & owner, CTokenAmount amount) override;
-    bool Flush();
+    bool Flush() override;
 };
 
 class CAccountsHistoryEraser : public CCustomCSView
@@ -149,7 +149,7 @@ public:
     CAccountsHistoryEraser(CCustomCSView & storage, uint32_t height, uint32_t txn, CHistoryErasers& erasers);
     Res AddBalance(CScript const & owner, CTokenAmount amount) override;
     Res SubBalance(CScript const & owner, CTokenAmount amount) override;
-    bool Flush();
+    bool Flush() override;
 };
 
 extern std::unique_ptr<CAccountHistoryStorage> paccountHistoryDB;

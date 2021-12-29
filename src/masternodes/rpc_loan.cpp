@@ -235,7 +235,7 @@ UniValue listcollateraltokens(const JSONRPCRequest& request) {
      }.Check(request);
 
     UniValue ret(UniValue::VARR);
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
     DCT_ID currentToken = {std::numeric_limits<uint32_t>::max()};
     uint32_t height = view.GetLastHeight();
     bool all = false;
@@ -1228,7 +1228,7 @@ UniValue getloaninfo(const JSONRPCRequest& request) {
 
     UniValue ret{UniValue::VOBJ};
 
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
     auto height = view.GetLastHeight();
     auto blockTime = WITH_LOCK(cs_main, return ::ChainActive()[height]->GetBlockTime());
 
@@ -1319,7 +1319,7 @@ UniValue getinterest(const JSONRPCRequest& request) {
     if (loanSchemeId.empty() || loanSchemeId.length() > 8)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "id cannot be empty or more than 8 chars long");
 
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
 
     if (!view.GetLoanScheme(loanSchemeId))
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot find existing loan scheme with id " + loanSchemeId);

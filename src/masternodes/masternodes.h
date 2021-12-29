@@ -507,6 +507,19 @@ public:
     struct DbVersion { static constexpr uint8_t prefix() { return 'D'; } };
 };
 
+class CImmutableCSView : public CCustomCSView
+{
+public:
+    CImmutableCSView(CStorageView&) = delete;
+    CImmutableCSView(CImmutableCSView&&) = default;
+    CImmutableCSView(const CImmutableCSView&) = delete;
+    CImmutableCSView(CCustomCSView& o) : CStorageView(o) {}
+    CImmutableCSView(CImmutableCSView& o) : CStorageView(o) {}
+
+private:
+    bool Flush() final { return false; }
+};
+
 std::map<CKeyID, CKey> AmISignerNow(int height, CAnchorData::CTeam const & team);
 
 extern std::unique_ptr<CCustomCSView> pcustomcsview;

@@ -315,7 +315,7 @@ UniValue listaccounts(const JSONRPCRequest& request) {
 
     UniValue ret(UniValue::VARR);
 
-    CCustomCSView mnview(*pcustomcsview);
+    CImmutableCSView mnview(*pcustomcsview);
     auto targetHeight = mnview.GetLastHeight() + 1;
 
     mnview.ForEachAccount([&](CScript const & account) {
@@ -409,7 +409,7 @@ UniValue getaccount(const JSONRPCRequest& request) {
         ret.setObject();
     }
 
-    CCustomCSView mnview(*pcustomcsview);
+    CImmutableCSView mnview(*pcustomcsview);
     auto targetHeight = mnview.GetLastHeight() + 1;
 
     mnview.CalculateOwnerRewards(reqOwner, targetHeight);
@@ -502,7 +502,7 @@ UniValue gettokenbalances(const JSONRPCRequest& request) {
     }
 
     CBalances totalBalances;
-    CCustomCSView mnview(*pcustomcsview);
+    CImmutableCSView mnview(*pcustomcsview);
     for (const auto& account : GetAllMineAccounts(pwallet)) {
         totalBalances.AddBalances(account.second.balances);
     }
@@ -1039,7 +1039,7 @@ UniValue listaccounthistory(const JSONRPCRequest& request) {
     std::set<uint256> txs;
     const bool shouldSearchInWallet = (tokenFilter.empty() || tokenFilter == "DFI") && CustomTxType::None == txType;
 
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
 
     auto hasToken = [&](TAmounts const & diffs) {
         for (auto const & diff : diffs) {
@@ -1282,7 +1282,7 @@ UniValue listburnhistory(const JSONRPCRequest& request) {
     };
 
     std::set<uint256> txs;
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
 
     auto hasToken = [&](TAmounts const & diffs) {
         for (auto const & diff : diffs) {
@@ -1438,7 +1438,7 @@ UniValue accounthistorycount(const JSONRPCRequest& request) {
     }
 
     std::set<uint256> txs;
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
     const bool shouldSearchInWallet = (tokenFilter.empty() || tokenFilter == "DFI") && CustomTxType::None == txType;
 
     auto hasToken = [&](TAmounts const & diffs) {
@@ -1539,7 +1539,7 @@ UniValue listcommunitybalances(const JSONRPCRequest& request) {
     UniValue ret(UniValue::VOBJ);
 
     CAmount burnt{0};
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
 
     auto height = view.GetLastHeight();
     auto postFortCanningHeight = height >= Params().GetConsensus().FortCanningHeight;
@@ -1812,7 +1812,7 @@ UniValue getburninfo(const JSONRPCRequest& request) {
     result.pushKV("dfipaybacktokens", dfipaybacktokens);
 
     CAmount burnt{0};
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
 
     auto height = view.GetLastHeight();
     auto postFortCanningHeight = height >= Params().GetConsensus().FortCanningHeight;

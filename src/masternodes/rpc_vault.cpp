@@ -473,7 +473,7 @@ UniValue listvaults(const JSONRPCRequest& request) {
 
     UniValue valueArr{UniValue::VARR};
 
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
     auto height = view.GetLastHeight();
     auto blockTime = WITH_LOCK(cs_main, return ::ChainActive()[height]->GetBlockTime());
 
@@ -532,7 +532,7 @@ UniValue getvault(const JSONRPCRequest& request) {
 
     CVaultId vaultId = ParseHashV(request.params[0], "vaultId");
 
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
     auto vault = view.GetVault(vaultId);
     if (!vault) {
         throw JSONRPCError(RPC_DATABASE_ERROR, strprintf("Vault <%s> not found", vaultId.GetHex()));
@@ -1039,7 +1039,7 @@ UniValue listauctions(const JSONRPCRequest& request) {
     }
 
     UniValue valueArr{UniValue::VARR};
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
     view.ForEachVaultAuction([&](const CVaultId& vaultId, const CAuctionData& data) {
         if (!including_start)
         {
@@ -1342,9 +1342,11 @@ UniValue listvaulthistory(const JSONRPCRequest& request) {
 
     std::set<uint256> txs;
 
-    auto hasToken = [&tokenFilter](TAmounts const & diffs) {
+    CImmutableCSView view(*pcustomcsview);
+
+    auto hasToken = [&](TAmounts const & diffs) {
         for (auto const & diff : diffs) {
-            auto token = pcustomcsview->GetToken(diff.first);
+            auto token = view.GetToken(diff.first);
             auto const tokenIdStr = token->CreateSymbolKey(diff.first);
             if(tokenIdStr == tokenFilter) {
                 return true;
@@ -1355,7 +1357,7 @@ UniValue listvaulthistory(const JSONRPCRequest& request) {
 
     std::map<uint32_t, UniValue, std::greater<uint32_t>> ret;
 
-    maxBlockHeight = std::min(maxBlockHeight, uint32_t(pcustomcsview->GetLastHeight()));
+    maxBlockHeight = std::min(maxBlockHeight, uint32_t(view.GetLastHeight()));
     depth = std::min(depth, maxBlockHeight);
 
     const auto startBlock = maxBlockHeight - depth;
@@ -1544,7 +1546,7 @@ UniValue estimateloan(const JSONRPCRequest& request) {
 
     CVaultId vaultId = ParseHashV(request.params[0], "vaultId");
 
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
 
     auto vault = view.GetVault(vaultId);
     if (!vault) {
@@ -1651,7 +1653,7 @@ UniValue estimatecollateral(const JSONRPCRequest& request) {
         collateralSplits["DFI"] = 1;
     }
 
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
 
     CAmount totalLoanValue{0};
     for (const auto& loan : loanBalances.balances) {
@@ -1736,7 +1738,7 @@ UniValue estimatevault(const JSONRPCRequest& request) {
     CBalances collateralBalances = DecodeAmounts(pwallet->chain(), request.params[0], "");
     CBalances loanBalances = DecodeAmounts(pwallet->chain(), request.params[1], "");
 
-    CCustomCSView view(*pcustomcsview);
+    CImmutableCSView view(*pcustomcsview);
     auto height = (uint32_t) view.GetLastHeight();
 
     CCollateralLoans result{};

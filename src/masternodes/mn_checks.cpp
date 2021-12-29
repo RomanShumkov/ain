@@ -759,7 +759,6 @@ Res ApplyCustomTx(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTr
     }
 
     mnview.AddUndo(view, tx.GetHash(), height);
-    view.Flush();
     return res;
 }
 

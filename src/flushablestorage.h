@@ -370,8 +370,8 @@ public:
         }
     }
 
-    bool Flush();
     void Discard();
+    virtual bool Flush();
     bool IsEmpty() const;
     CStorageKV& GetStorage();
     size_t SizeEstimate() const;

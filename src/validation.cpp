@@ -2674,7 +2674,6 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     ProcessGovEvents(pindex, cache, chainparams);
 
     mnview.AddUndo(cache, {}, pindex->nHeight);
-    cache.Flush();
 
     if (!fIsFakeNet) {
         mnview.IncrementMintedBy(*nodeId);

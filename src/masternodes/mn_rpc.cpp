@@ -14,7 +14,7 @@ CAccounts GetAllMineAccounts(CWallet * const pwallet) {
 
     CAccounts walletAccounts;
 
-    CCustomCSView mnview(*pcustomcsview);
+    CImmutableCSView mnview(*pcustomcsview);
     auto targetHeight = mnview.GetLastHeight() + 1;
 
     mnview.ForEachAccount([&](CScript const & account) {
@@ -420,7 +420,7 @@ void execTestTx(const CTransaction& tx, uint32_t height, CTransactionRef optAuth
     auto res = CustomMetadataParse(height, Params().GetConsensus(), metadata, txMessage);
     if (res) {
         LOCK(cs_main);
-        CCustomCSView view(*pcustomcsview);
+        CImmutableCSView view(*pcustomcsview);
         CCoinsViewCache coins(&::ChainstateActive().CoinsTip());
         if (optAuthTx)
             AddCoins(coins, *optAuthTx, height);
@@ -670,12 +670,13 @@ UniValue listgovs(const JSONRPCRequest& request) {
                                   "LOAN_LIQUIDATION_PENALTY", "LP_SPLITS", "ORACLE_BLOCK_INTERVAL", "ORACLE_DEVIATION", "ATTRIBUTES"};
 
     // Get all stored Gov var changes
-    auto pending = pcustomcsview->GetAllStoredVariables();
+    CImmutableCSView view(*pcustomcsview);
+    auto pending = view.GetAllStoredVariables();
 
     UniValue result(UniValue::VARR);
     for (const auto& name : vars) {
         UniValue innerResult(UniValue::VARR);
-        auto var = pcustomcsview->GetVariable(name);
+        auto var = view.GetVariable(name);
         if (var) {
             UniValue ret(UniValue::VOBJ);
             ret.pushKV(var->GetName(),var->Export());

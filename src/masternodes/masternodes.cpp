@@ -778,13 +778,10 @@ void CCustomCSView::CalcAnchoringTeams(const uint256 & stakeModifier, const CBlo
     std::set<uint256> masternodeIDs;
     const int blockSample = 7 * Params().GetConsensus().blocksPerDay(); // One week
 
-    {
-        LOCK(cs_main);
-        const CBlockIndex* pindex = pindexNew;
-        for (int i{0}; pindex && i < blockSample; pindex = pindex->pprev, ++i) {
-            if (auto id = GetMasternodeIdByOperator(pindex->minterKey())) {
-                masternodeIDs.insert(*id);
-            }
+    const CBlockIndex* pindex = pindexNew;
+    for (int i{0}; pindex && i < blockSample; pindex = pindex->pprev, ++i) {
+        if (auto id = GetMasternodeIdByOperator(pindex->minterKey())) {
+            masternodeIDs.insert(*id);
         }
     }
 
@@ -858,6 +855,7 @@ void CCustomCSView::AddUndo(CCustomCSView & cache, uint256 const & txid, uint32_
     auto flushable = cache.GetStorage().GetFlushableStorage();
     assert(flushable);
     SetUndo({height, txid}, CUndo::Construct(GetStorage(), flushable->GetRaw()));
+    cache.Flush();
 }
 
 void CCustomCSView::OnUndoTx(uint256 const & txid, uint32_t height)
