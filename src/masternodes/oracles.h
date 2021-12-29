@@ -150,10 +150,14 @@ public:
     Res SetIntervalBlock(const uint32_t blockInterval);
     uint32_t GetIntervalBlock() const;
 
+    Res SetLastFixedPriceBlock(const uint32_t height);
+    uint32_t GetLastFixedPriceBlock() const;
+
     struct ByName { static constexpr uint8_t prefix() { return 'O'; } };
     struct PriceDeviation { static constexpr uint8_t prefix() { return 'Y'; } };
     struct FixedIntervalBlockKey { static constexpr uint8_t prefix() { return 'z'; } };
     struct FixedIntervalPriceKey { static constexpr uint8_t prefix() { return 'y'; } };
+    struct FixedIntervalHeightKey { static constexpr uint8_t prefix() { return 'm'; } };
 };
 
 #endif // DEFI_MASTERNODES_ORACLES_H

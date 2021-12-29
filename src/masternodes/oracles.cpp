@@ -201,3 +201,20 @@ uint32_t COracleView::GetIntervalBlock() const
     // Default
     return 60 * 60 / Params().GetConsensus().pos.nTargetSpacing;
 }
+
+Res COracleView::SetLastFixedPriceBlock(const uint32_t height)
+{
+    Write(FixedIntervalHeightKey::prefix(), height);
+    return Res::Ok();
+}
+
+uint32_t COracleView::GetLastFixedPriceBlock() const
+{
+    uint32_t height;
+    if (Read(FixedIntervalHeightKey::prefix(), height)) {
+        return height;
+    }
+
+    // Default
+    return 0;
+}

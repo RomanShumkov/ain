@@ -3073,7 +3073,11 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
         viewCache.Flush();
     }
 
-    if (pindex->nHeight % chainparams.GetConsensus().blocksCollateralizationRatioCalculation() == 0) {
+    auto lastFixedPriceBlock = cache.GetLastFixedPriceBlock();
+    auto blockCollateralRatioCalculation = chainparams.GetConsensus().blocksCollateralizationRatioCalculation();
+
+    if (pindex->nHeight % blockCollateralRatioCalculation == 0
+    && (lastFixedPriceBlock == 0 || lastFixedPriceBlock > pindex->nHeight - blockCollateralRatioCalculation)) {
         bool useNextPrice = false, requireLivePrice = true;
         LogPrint(BCLog::LOAN,"ProcessLoanEvents()->ForEachVaultCollateral():\n"); /* Continued */
 
@@ -3259,6 +3263,7 @@ void CChainState::ProcessOracleEvents(const CBlockIndex* pindex, CCustomCSView& 
     if (pindex->nHeight % blockInterval != 0) {
         return;
     }
+    bool actualPriceUpdate = false;
     cache.ForEachFixedIntervalPrice([&](const CTokenCurrencyPair&, CFixedIntervalPrice fixedIntervalPrice){
         // Ensure that we update active and next regardless of state of things
         // And SetFixedIntervalPrice on each evaluation of this block.
@@ -3273,20 +3278,22 @@ void CChainState::ProcessOracleEvents(const CBlockIndex* pindex, CCustomCSView& 
 
         // Furthermore, the time stamp is always indicative of the
         // last price time.
-        auto nextPrice = fixedIntervalPrice.priceRecord[1];
+        auto& nextPrice = fixedIntervalPrice.priceRecord[1];
         if (nextPrice > 0) {
-            fixedIntervalPrice.priceRecord[0] = fixedIntervalPrice.priceRecord[1];
+            auto& currentPrice = fixedIntervalPrice.priceRecord[0];
+            actualPriceUpdate = actualPriceUpdate || nextPrice != currentPrice;
+            currentPrice = nextPrice;
         }
         // keep timestamp updated
         fixedIntervalPrice.timestamp = pindex->nTime;
         // Use -1 to indicate empty price
-        fixedIntervalPrice.priceRecord[1] = -1;
+        nextPrice = -1;
         auto aggregatePrice = GetAggregatePrice(cache,
                                                 fixedIntervalPrice.priceFeedId.first,
                                                 fixedIntervalPrice.priceFeedId.second,
                                                 pindex->nTime);
         if (aggregatePrice) {
-            fixedIntervalPrice.priceRecord[1] = aggregatePrice;
+            nextPrice = aggregatePrice;
         } else {
             LogPrint(BCLog::ORACLE,"ProcessOracleEvents(): No aggregate price available: %s\n", aggregatePrice.msg);
         }
@@ -3296,6 +3303,10 @@ void CChainState::ProcessOracleEvents(const CBlockIndex* pindex, CCustomCSView& 
         }
         return true;
     });
+
+    if (actualPriceUpdate && pindex->nHeight >= chainparams.GetConsensus().FortCanningHillHeight) {
+        cache.SetLastFixedPriceBlock(pindex->nHeight);
+    }
 }
 
 bool CChainState::FlushStateToDisk(
