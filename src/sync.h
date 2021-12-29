@@ -9,6 +9,7 @@
 #include <threadsafety.h>
 
 #include <atomic>
+#include <cassert>
 #include <chrono>
 #include <condition_variable>
 #include <thread>
@@ -333,21 +334,34 @@ struct SCOPED_LOCKABLE LockAssertion
 
 class CLockFreeGuard
 {
-    std::atomic_bool& lock;
+    bool locked{false};
+    std::atomic_bool& cs_lock;
 public:
-    CLockFreeGuard(std::atomic_bool& lock) : lock(lock)
+    CLockFreeGuard(std::atomic_bool& cs_lock) : cs_lock(cs_lock)
     {
-        bool desired = false;
-        while (!lock.compare_exchange_weak(desired, true,
-                                           std::memory_order_release,
-                                           std::memory_order_relaxed)) {
-            desired = false;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
+        lock();
     }
     ~CLockFreeGuard()
     {
-        lock.store(false, std::memory_order_release);
+        unlock();
+    }
+    void lock()
+    {
+        assert(!locked);
+        while (!cs_lock.compare_exchange_weak(locked, true,
+                                              std::memory_order_release,
+                                              std::memory_order_relaxed)) {
+            locked = false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        locked = true;
+    }
+    void unlock()
+    {
+        if (locked) {
+            cs_lock.store(false, std::memory_order_release);
+            locked = false;
+        }
     }
 };
 

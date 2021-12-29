@@ -35,6 +35,7 @@
 #include <inttypes.h>
 
 #include <assert.h>
+#include <mutex>
 
 uint256 to_uint256(const UInt256 & i)
 {
