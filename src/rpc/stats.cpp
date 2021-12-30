@@ -82,6 +82,10 @@ static UniValue getrpcstats(const JSONRPCRequest& request)
         },
     }.Check(request);
 
+    if (!gArgs.GetBoolArg("-rpcstats", DEFAULT_RPC_STATS)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST, "Rpcstats flag is not set.");
+    }
+
     auto command = request.params[0].get_str();
     return statsRPC.get(command);
 }
@@ -98,6 +102,10 @@ static UniValue listrpcstats(const JSONRPCRequest& request)
             HelpExampleRpc("listrpcstats", "")
         },
     }.Check(request);
+
+    if (!gArgs.GetBoolArg("-rpcstats", DEFAULT_RPC_STATS)) {
+        throw JSONRPCError(RPC_INVALID_REQUEST, "Rpcstats flag is not set.");
+    }
 
     UniValue ret(UniValue::VARR);
     for (const auto& key : statsRPC.getKeys())
@@ -118,8 +126,6 @@ static const CRPCCommand commands[] =
 
 void RegisterStatsRPCCommands(CRPCTable &t)
 {
-    if (gArgs.GetBoolArg("-rpcstats", DEFAULT_RPC_STATS)) {
-        for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++)
-            t.appendCommand(commands[vcidx].name, &commands[vcidx]);
-    }
+    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++)
+        t.appendCommand(commands[vcidx].name, &commands[vcidx]);
 }

@@ -39,16 +39,16 @@ class RPCstats(DefiTestFramework):
         assert_equal(getrpcstats["count"], 2)
 
         try:
-            self.nodes[1].getrpcstats()
+            self.nodes[1].getrpcstats("listunspent")
         except JSONRPCException as e:
             errorString = e.error['message']
-        assert("Method not found" in errorString)
+        assert("Rpcstats flag is not set." in errorString)
 
         try:
             self.nodes[1].listrpcstats()
         except JSONRPCException as e:
             errorString = e.error['message']
-        assert("Method not found" in errorString)
+        assert("Rpcstats flag is not set." in errorString)
 
 if __name__ == '__main__':
     RPCstats().main ()
