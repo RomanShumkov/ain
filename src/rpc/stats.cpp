@@ -71,19 +71,35 @@ bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_
 static UniValue getrpcstats(const JSONRPCRequest& request)
 {
     RPCHelpMan{"getrpcstats",
-        "\nList used RPC commands for this session.\n",
+        "\nGet RPC stats for selected command.\n",
         {
             {"command", RPCArg::Type::STR, RPCArg::Optional::NO, "The command to get stats for."}
         },
-        RPCResults{},
+        RPCResult{
+            " {\n"
+            "  \"name\":               (string) The RPC command name.\n"
+            "  \"latency\":            (json object) Min, max and average latency.\n"
+            "  \"payload\":            (json object) Min, max and average payload size in bytes.\n"
+            "  \"count\":              (numeric) The number of times this command as been used.\n"
+            "  \"lastUsedTime\":       (numeric) Last used time as timestamp.\n"
+            "  \"history\":            (json array) History of last 5 RPC calls.\n"
+            "  [\n"
+            "       {\n"
+            "           \"timestamp\": (numeric)\n"
+            "           \"latency\":   (numeric)\n"
+            "           \"payload\":   (numeric)\n"
+            "       }\n"
+            "  ]\n"
+            "}"
+        },
         RPCExamples{
             HelpExampleCli("getrpcstats", "getblockcount") +
-            HelpExampleRpc("getrpcstats", "getblockcount")
+            HelpExampleRpc("getrpcstats", "\"getblockcount\"")
         },
     }.Check(request);
 
     if (!gArgs.GetBoolArg("-rpcstats", DEFAULT_RPC_STATS)) {
-        throw JSONRPCError(RPC_INVALID_REQUEST, "Rpcstats flag is not set.");
+        throw JSONRPCError(RPC_INVALID_REQUEST, "Rpcstats flag is not set. Activate it by restarting node with -rpcstats.");
     }
 
     auto command = request.params[0].get_str();
@@ -93,10 +109,27 @@ static UniValue getrpcstats(const JSONRPCRequest& request)
 static UniValue listrpcstats(const JSONRPCRequest& request)
 {
     RPCHelpMan{"listrpcstats",
-        "\nList used RPC commands for this session.\n",
-        {
+        "\nList used RPC commands.\n",
+        {},
+        RPCResult{
+            "[\n"
+            " {\n"
+            "  \"name\":               (string) The RPC command name.\n"
+            "  \"latency\":            (json object) Min, max and average latency.\n"
+            "  \"payload\":            (json object) Min, max and average payload size in bytes.\n"
+            "  \"count\":              (numeric) The number of times this command as been used.\n"
+            "  \"lastUsedTime\":       (numeric) Last used time as timestamp.\n"
+            "  \"history\":            (json array) History of last 5 RPC calls.\n"
+            "  [\n"
+            "       {\n"
+            "           \"timestamp\": (numeric)\n"
+            "           \"latency\":   (numeric)\n"
+            "           \"payload\":   (numeric)\n"
+            "       }\n"
+            "  ]\n"
+            " }\n"
+            "]"
         },
-        RPCResults{},
         RPCExamples{
             HelpExampleCli("listrpcstats", "") +
             HelpExampleRpc("listrpcstats", "")
@@ -104,7 +137,7 @@ static UniValue listrpcstats(const JSONRPCRequest& request)
     }.Check(request);
 
     if (!gArgs.GetBoolArg("-rpcstats", DEFAULT_RPC_STATS)) {
-        throw JSONRPCError(RPC_INVALID_REQUEST, "Rpcstats flag is not set.");
+        throw JSONRPCError(RPC_INVALID_REQUEST, "Rpcstats flag is not set. Activate it by restarting node with -rpcstats.");
     }
 
     UniValue ret(UniValue::VARR);
