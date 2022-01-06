@@ -19,7 +19,7 @@ bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_
             count       = 1,
             timestamp   = GetSystemTimeInSeconds();
 
-    auto stats = statsRPC.get(name);
+    UniValue stats = statsRPC.get(name);
     if (!stats.empty()) {
         count = stats["count"].get_int() + 1;
 
@@ -33,7 +33,7 @@ bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_
         max_payload = std::max(payload, payloadObj["max"].get_int64());
         avg_payload = payloadObj["avg"].get_int() + (payload - payloadObj["avg"].get_int()) / count;
 
-        auto historyArr = stats["history"].get_array();
+        UniValue historyArr = stats["history"].get_array();
         size_t i = 0;
         if (historyArr.size() == RPC_STATS_HISTORY_SIZE) {
             i++;
@@ -141,8 +141,7 @@ static UniValue listrpcstats(const JSONRPCRequest& request)
     }
 
     UniValue ret(UniValue::VARR);
-    for (const auto& key : statsRPC.getKeys())
-    {
+    for (const auto& key : statsRPC.getKeys()) {
         ret.push_back(statsRPC.get(key));
     }
     return ret;
