@@ -27,11 +27,13 @@
 #include <algorithm>
 #include <atomic>
 #include <exception>
+#include <list>
 #include <map>
 #include <memory>
 #include <set>
 #include <stdint.h>
 #include <string>
+#include <queue>
 #include <utility>
 #include <vector>
 
@@ -845,6 +847,20 @@ inline CAmount CalculateCoinbaseReward(const CAmount blockReward, const uint32_t
     return (blockReward  * percentage) / 10000;
 }
 
-Res AddNonTxToBurnIndex(const CScript& from, const CBalances& amounts);
+class CParallelViewCache {
+    std::atomic_bool lock{false};
+    std::list<std::thread> threads;
+    std::list<CCustomCSView> views;
+    std::atomic_bool running{false};
+    std::queue<std::function<void(CCustomCSView&)>> tasks;
+    std::function<void()> createThread;
+    void runner(CCustomCSView& view);
+
+public:
+    CParallelViewCache(CCustomCSView& view, uint8_t maxThreads);
+    ~CParallelViewCache();
+    void addTask(std::function<void(CCustomCSView&)> task);
+    void waitFlush();
+};
 
 #endif // DEFI_VALIDATION_H

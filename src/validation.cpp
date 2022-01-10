@@ -3050,6 +3050,13 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
         bool useNextPrice = false, requireLivePrice = true;
         LogPrint(BCLog::LOAN,"ProcessLoanEvents()->ForEachVaultCollateral():\n"); /* Continued */
 
+        auto maxThreads = std::thread::hardware_concurrency();
+        maxThreads = std::max(2u, std::min(4u, maxThreads));
+
+        CParallelViewCache exec(cache, maxThreads);
+
+        std::atomic_bool cs_vault{false};
+
         cache.ForEachVaultCollateral([&](const CVaultId& vaultId, const CBalances& collaterals) {
             auto collateral = cache.GetLoanCollaterals(vaultId, collaterals, pindex->nHeight, pindex->nTime, useNextPrice, requireLivePrice);
             if (!collateral) {
@@ -3068,69 +3075,75 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
             // Time to liquidate vault.
             vault->isUnderLiquidation = true;
             cache.StoreVault(vaultId, *vault);
-            auto loanTokens = cache.GetLoanTokens(vaultId);
-            assert(loanTokens);
 
-            // Get the interest rate for each loan token in the vault, find
-            // the interest value and move it to the totals, removing it from the
-            // vault, while also stopping the vault from accumulating interest
-            // further. Note, however, it's added back so that it's accurate
-            // for auction calculations.
-            CBalances totalInterest;
-            for (auto& loan : loanTokens->balances) {
-                auto tokenId = loan.first;
-                auto tokenValue = loan.second;
-                auto rate = cache.GetInterestRate(vaultId, tokenId, pindex->nHeight);
-                assert(rate);
-                LogPrint(BCLog::LOAN,"\t\t"); /* Continued */
-                auto subInterest = TotalInterest(*rate, pindex->nHeight);
-                totalInterest.Add({tokenId, subInterest});
+            exec.addTask([=, &cs_vault](CCustomCSView& cache) {
+                auto loanTokens = cache.GetLoanTokens(vaultId);
+                assert(loanTokens);
+
+                // Get the interest rate for each loan token in the vault, find
+                // the interest value and move it to the totals, removing it from the
+                // vault, while also stopping the vault from accumulating interest
+                // further. Note, however, it's added back so that it's accurate
+                // for auction calculations.
+                CBalances totalInterest;
+                for (auto& loan : loanTokens->balances) {
+                    auto tokenId = loan.first;
+                    auto tokenValue = loan.second;
+                    auto rate = cache.GetInterestRate(vaultId, tokenId, pindex->nHeight);
+                    assert(rate);
+                    LogPrint(BCLog::LOAN,"\t\t"); /* Continued */
+                    auto subInterest = TotalInterest(*rate, pindex->nHeight);
+                    totalInterest.Add({tokenId, subInterest});
 
                 // Remove the interests from the vault and the storage respectively
-                cache.SubLoanToken(vaultId, {tokenId, tokenValue});
-                LogPrint(BCLog::LOAN,"\t\t"); /* Continued */
-                cache.EraseInterest(pindex->nHeight, vaultId, vault->schemeId, tokenId, tokenValue, subInterest);
-                // Putting this back in now for auction calculations.
-                loan.second += subInterest;
-            }
-
-            // Remove the collaterals out of the vault.
-            // (Prep to get the auction batches instead)
-            for (const auto& col : collaterals.balances) {
-                auto tokenId = col.first;
-                auto tokenValue = col.second;
-                cache.SubVaultCollateral(vaultId, {tokenId, tokenValue});
-            }
-
-            auto batches = CollectAuctionBatches(*collateral.val, collaterals.balances, loanTokens->balances);
-
-            // Now, let's add the remaining amounts and store the batch.
-            for (auto i = 0u; i < batches.size(); i++) {
-                auto& batch = batches[i];
-                auto tokenId = batch.loanAmount.nTokenId;
-                auto interest = totalInterest.balances[tokenId];
-                if (interest > 0) {
-                    auto balance = loanTokens->balances[tokenId];
-                    auto interestPart = DivideAmounts(batch.loanAmount.nValue, balance);
-                    batch.loanInterest = MultiplyAmounts(interestPart, interest);
+                    cache.SubLoanToken(vaultId, {tokenId, tokenValue});
+                    LogPrint(BCLog::LOAN,"\t\t"); /* Continued */
+                    cache.EraseInterest(pindex->nHeight, vaultId, vault->schemeId, tokenId, tokenValue, subInterest);
+                    // Putting this back in now for auction calculations.
+                    loan.second += subInterest;
                 }
-                cache.StoreAuctionBatch(vaultId, i, batch);
-            }
 
-            // All done. Ready to save the overall auction.
-            cache.StoreAuction(vaultId, CAuctionData{
-                                            uint32_t(batches.size()),
-                                            pindex->nHeight + chainparams.GetConsensus().blocksCollateralAuction(),
-                                            cache.GetLoanLiquidationPenalty()
+                // Remove the collaterals out of the vault.
+                // (Prep to get the auction batches instead)
+                for (const auto& col : collaterals.balances) {
+                    auto tokenId = col.first;
+                    auto tokenValue = col.second;
+                    cache.SubVaultCollateral(vaultId, {tokenId, tokenValue});
+                }
+
+                auto batches = CollectAuctionBatches(*collateral.val, collaterals.balances, loanTokens->balances);
+
+                // Now, let's add the remaining amounts and store the batch.
+                for (auto i = 0u; i < batches.size(); i++) {
+                    auto& batch = batches[i];
+                    auto tokenId = batch.loanAmount.nTokenId;
+                    auto interest = totalInterest.balances[tokenId];
+                    if (interest > 0) {
+                        auto balance = loanTokens->balances[tokenId];
+                        auto interestPart = DivideAmounts(batch.loanAmount.nValue, balance);
+                        batch.loanInterest = MultiplyAmounts(interestPart, interest);
+                    }
+                    cache.StoreAuctionBatch(vaultId, i, batch);
+                }
+
+                // All done. Ready to save the overall auction.
+                cache.StoreAuction(vaultId, CAuctionData{
+                                                uint32_t(batches.size()),
+                                                pindex->nHeight + chainparams.GetConsensus().blocksCollateralAuction(),
+                                                cache.GetLoanLiquidationPenalty()
+                });
+
+                // Store state in vault DB
+                if (pvaultHistoryDB) {
+                    CLockFreeGuard guard(cs_vault);
+                    pvaultHistoryDB->WriteVaultState(cache, *pindex, vaultId, collateral.val->ratio(), batches);
+                }
             });
-
-            // Store state in vault DB
-            if (pvaultHistoryDB) {
-                pvaultHistoryDB->WriteVaultState(cache, *pindex, vaultId, collateral.val->ratio());
-            }
 
             return true;
         });
+
+        exec.waitFlush();
     }
 
     CHistoryWriters writers{nullptr, pburnHistoryDB.get(), pvaultHistoryDB.get()};
@@ -6559,3 +6572,72 @@ public:
     }
 };
 static CMainCleanup instance_of_cmaincleanup;
+
+void CParallelViewCache::runner(CCustomCSView& view)
+{
+    while (true) {
+        std::function<void(CCustomCSView&)> task;
+        {
+            CLockFreeGuard guard(lock);
+            if (!tasks.empty()) {
+                task = tasks.front();
+                tasks.pop();
+            } else if (!running) {
+                return;
+            }
+        }
+        if (task) {
+            task(view);
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        }
+    }
+}
+
+CParallelViewCache::CParallelViewCache(CCustomCSView& view, uint8_t maxThreads)
+{
+    createThread = std::bind([this](CCustomCSView& view, uint8_t maxThreads) {
+        if (threads.size() < maxThreads) {
+            running = true;
+            auto& cache = views.emplace_back(view);
+            threads.emplace_back(&CParallelViewCache::runner, this, std::ref(cache));
+        }
+    }, std::ref(view), maxThreads);
+}
+
+CParallelViewCache::~CParallelViewCache()
+{
+    if (running) {
+        waitFlush();
+    }
+}
+
+/**
+ * task could be a lambda capture variables by copy
+ * only atomic variables are allowed
+ */
+void CParallelViewCache::addTask(std::function<void(CCustomCSView&)> task)
+{
+    bool needsThread;
+    {
+        CLockFreeGuard guard(lock);
+        needsThread = !running || !tasks.empty();
+        tasks.push(task);
+    }
+    if (needsThread) {
+        createThread();
+    }
+}
+
+void CParallelViewCache::waitFlush()
+{
+    running = false;
+    for (auto& thread : threads) {
+        thread.join();
+    }
+    threads.clear();
+    for (auto& view : views) {
+        view.Flush();
+    }
+    views.clear();
+}
