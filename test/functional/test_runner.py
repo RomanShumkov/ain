@@ -251,6 +251,7 @@ BASE_SCRIPTS = [
     'rpc_listvaulthistory.py',
     'feature_logging.py',
     'feature_loan_scheme.py',
+    'feature_loan_odd_values.py',
     #'feature_forced_reward_address.py',
     'feature_loan_vault.py',
     'feature_loan_deposittovault.py',

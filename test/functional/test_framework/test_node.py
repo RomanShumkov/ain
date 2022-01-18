@@ -248,6 +248,10 @@ class TestNode():
         poll_per_s = 4
         for _ in range(poll_per_s * self.rpc_timeout):
             if self.process.poll() is not None:
+                import pprint
+                print("DEBUGIN")
+                pprint.pprint(self.process)
+                print("ENDDEBUGIN")
                 raise FailedToStartError(self._node_msg(
                     'defid exited with status {} during initialization'.format(self.process.returncode)))
             try:
