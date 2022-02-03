@@ -35,6 +35,7 @@
 #include <float.h>
 #include <inttypes.h>
 #include <string.h>
+#include <thread>
 
 #include <compat.h>
 
@@ -44,7 +45,7 @@
 //#include <errno.h>
 //#include <netdb.h>
 //#include <sys/socket.h>
-//#include <sys/time.h>
+#include <sys/time.h>
 //#include <netinet/in.h>
 //#include <arpa/inet.h>
 
@@ -52,8 +53,6 @@
 #define MAX_MSG_LENGTH     0x02000000
 #define MAX_GETDATA_HASHES 50000
 #define ENABLED_SERVICES   0ULL  // we don't provide full blocks to remote nodes
-#define PROTOCOL_VERSION   70013
-#define MIN_PROTO_VERSION  70002 // peers earlier than this protocol version not supported (need v0.9 txFee relay rules)
 #define LOCAL_HOST         (UInt128) {{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0x7f, 0x00, 0x00, 0x01 }}
 #define CONNECT_TIMEOUT    3.0
 #define MESSAGE_TIMEOUT    10.0
@@ -92,7 +91,7 @@
 
 char const * spv_logfilename = NULL;
 int spv_log2console = 1;
-boost::mutex log_mutex;
+std::mutex log_mutex;
 
 typedef enum {
     inv_undefined = 0,
@@ -140,8 +139,8 @@ typedef struct {
     void (**volatile pongCallback)(void *info, int success);
     void *volatile mempoolInfo;
     void (*volatile mempoolCallback)(void *info, int success);
-    std::unique_ptr<boost::thread> thread;
-    boost::mutex lock;
+    std::unique_ptr<std::thread> thread;
+    std::mutex lock;
 } BRPeerContext;
 
 void BRPeerSendVersionMessage(BRPeer *peer);
@@ -233,7 +232,7 @@ static int _BRPeerAcceptVersionMessage(BRPeer *peer, const uint8_t *msg, size_t 
                      off + strLen + sizeof(uint32_t));
             r = 0;
         }
-        else if (ctx->version < MIN_PROTO_VERSION) {
+        else if (ctx->version < BR_MIN_PROTO_VERSION) {
             peer_log(peer, "protocol version %" PRIu32 " not supported", ctx->version);
             r = 0;
         }
@@ -1297,9 +1296,7 @@ int BRPeerConnect(BRPeer *peer)
             // No race - set before the thread starts.
             ctx->disconnectTime = tv.tv_sec + (double)tv.tv_usec/1000000 + CONNECT_TIMEOUT;
             {
-                boost::thread::attributes attrs;
-                attrs.set_stack_size(PTHREAD_STACK_SIZE);
-                ctx->thread.reset(new boost::thread(attrs, boost::bind(_peerThreadRoutine, peer)));
+                ctx->thread.reset(new std::thread(std::bind(_peerThreadRoutine, peer)));
                 ctx->thread->detach();
                 ctx->lock.unlock();
                 return 1; // thread successful run
@@ -1479,7 +1476,7 @@ void BRPeerSendVersionMessage(BRPeer *peer)
     size_t off = 0, userAgentLen = strlen(USER_AGENT);
     uint8_t msg[80 + BRVarIntSize(userAgentLen) + userAgentLen + 5];
     
-    UInt32SetLE(&msg[off], PROTOCOL_VERSION); // version
+    UInt32SetLE(&msg[off], BR_PROTOCOL_VERSION); // version
     off += sizeof(uint32_t);
     UInt64SetLE(&msg[off], ENABLED_SERVICES); // services
     off += sizeof(uint64_t);
@@ -1568,7 +1565,7 @@ void BRPeerSendGetheaders(BRPeer *peer, const UInt256 locators[], size_t locator
     size_t msgLen = sizeof(uint32_t) + BRVarIntSize(locatorsCount) + sizeof(*locators)*locatorsCount + sizeof(hashStop);
     uint8_t msg[msgLen];
     
-    UInt32SetLE(&msg[off], PROTOCOL_VERSION);
+    UInt32SetLE(&msg[off], BR_PROTOCOL_VERSION);
     off += sizeof(uint32_t);
     off += BRVarIntSet(&msg[off], (off <= msgLen ? msgLen - off : 0), locatorsCount);
 
@@ -1593,7 +1590,7 @@ void BRPeerSendGetblocks(BRPeer *peer, const UInt256 locators[], size_t locators
     size_t msgLen = sizeof(uint32_t) + BRVarIntSize(locatorsCount) + sizeof(*locators)*locatorsCount + sizeof(hashStop);
     uint8_t msg[msgLen];
     
-    UInt32SetLE(&msg[off], PROTOCOL_VERSION);
+    UInt32SetLE(&msg[off], BR_PROTOCOL_VERSION);
     off += sizeof(uint32_t);
     off += BRVarIntSet(&msg[off], (off <= msgLen ? msgLen - off : 0), locatorsCount);
     

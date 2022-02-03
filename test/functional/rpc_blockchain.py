@@ -133,7 +133,9 @@ class BlockchainTest(DefiTestFramework):
             'eunospaya': {'type': 'buried', 'active': False, 'height': 10000000},
             'fortcanning': {'type': 'buried', 'active': False, 'height': 10000000},
             'fortcanningmuseum': {'type': 'buried', 'active': False, 'height': 10000000},
+            'fortcanningpark': {'type': 'buried', 'active': False, 'height': 10000000},
             'fortcanninghill': {'type': 'buried', 'active': False, 'height': 10000000},
+            'greatworld': {'type': 'buried', 'active': False, 'height': 10000000},
             'testdummy': {
                 'type': 'bip9',
                 'bip9': {

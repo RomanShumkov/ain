@@ -59,6 +59,7 @@ struct Params {
     uint32_t foundationShare;
     std::set<CScript> foundationMembers;
     std::set<CScript> accountDestruction;
+    std::map<std::string, CScript> smartContracts;
     /* Block hash that is excepted from BIP16 enforcement */
     uint256 BIP16Exception;
     /** Block height and hash at which BIP34 becomes active */
@@ -91,7 +92,9 @@ struct Params {
     int EunosPayaHeight;
     int FortCanningHeight;
     int FortCanningMuseumHeight;
+    int FortCanningParkHeight;
     int FortCanningHillHeight;
+    int GreatWorldHeight;
 
     /** Foundation share after AMK, normalized to COIN = 100% */
     CAmount foundationShareDFIP1;

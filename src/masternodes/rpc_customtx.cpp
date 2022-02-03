@@ -8,12 +8,9 @@
 #include <rpc/request.h>
 #include <univalue.h>
 
-#include <boost/variant/apply_visitor.hpp>
-#include <boost/variant/static_visitor.hpp>
-
 extern std::string ScriptToString(CScript const& script);
 
-class CCustomTxRpcVisitor : public boost::static_visitor<void>
+class CCustomTxRpcVisitor
 {
     uint32_t height;
     UniValue& rpcInfo;
@@ -159,6 +156,11 @@ public:
     void operator()(const CAnyAccountsToAccountsMessage& obj) const {
         rpcInfo.pushKV("from", accountsInfo(obj.from));
         rpcInfo.pushKV("to", accountsInfo(obj.to));
+    }
+
+    void operator()(const CSmartContractMessage& obj) const {
+        rpcInfo.pushKV("name", obj.name);
+        rpcInfo.pushKV("accounts", accountsInfo(obj.accounts));
     }
 
     void operator()(const CCreatePoolPairMessage& obj) const {
@@ -455,7 +457,7 @@ Res RpcInfo(const CTransaction& tx, uint32_t height, CustomTxType& txType, UniVa
     auto res = CustomMetadataParse(height, Params().GetConsensus(), metadata, txMessage);
     if (res) {
         CCustomCSView mnview(*pcustomcsview);
-        boost::apply_visitor(CCustomTxRpcVisitor(tx, height, mnview, results), txMessage);
+        std::visit(CCustomTxRpcVisitor(tx, height, mnview, results), txMessage);
     }
     return res;
 }

@@ -16,6 +16,7 @@
 #include <hash.h>
 #include <index/blockfilterindex.h>
 #include <masternodes/masternodes.h>
+#include <masternodes/mn_checks.h>
 #include <policy/feerate.h>
 #include <policy/policy.h>
 #include <policy/rbf.h>
@@ -25,7 +26,6 @@
 #include <script/descriptor.h>
 #include <streams.h>
 #include <sync.h>
-#include <txdb.h>
 #include <txmempool.h>
 #include <undo.h>
 #include <util/strencodings.h>
@@ -33,15 +33,12 @@
 #include <util/validation.h>
 #include <validation.h>
 #include <validationinterface.h>
-#include <versionbitsinfo.h>
 #include <warnings.h>
 
 #include <assert.h>
 #include <stdint.h>
 
 #include <univalue.h>
-
-#include <boost/thread/thread.hpp> // boost::thread::interrupt
 
 #include <condition_variable>
 #include <memory>
@@ -573,36 +570,6 @@ static UniValue getrawmempool(const JSONRPCRequest& request)
     return MempoolToJSON(::mempool, fVerbose);
 }
 
-static UniValue clearmempool(const JSONRPCRequest& request)
-{
-    RPCHelpMan("clearmempool",
-       "\nClears the memory pool and returns a list of the removed transactions.\n",
-       {},
-       RPCResult{
-           "[                     (json array of string)\n"
-           "  \"hash\"              (string) The transaction hash\n"
-           "  ,...\n"
-           "]\n"
-       },
-       RPCExamples{
-           HelpExampleCli("clearmempool", "")
-           + HelpExampleRpc("clearmempool", "")
-       }
-    ).Check(request);
-
-    std::vector<uint256> vtxid;
-    mempool.queryHashes(vtxid);
-
-    UniValue removed(UniValue::VARR);
-    for (const uint256& hash : vtxid)
-        removed.push_back(hash.ToString());
-
-    LOCK(cs_main);
-    mempool.clear();
-
-    return removed;
-}
-
 static UniValue getmempoolancestors(const JSONRPCRequest& request)
 {
             RPCHelpMan{"getmempoolancestors",
@@ -1078,7 +1045,7 @@ static UniValue gettxoutsetinfo(const JSONRPCRequest& request)
     ::ChainstateActive().ForceFlushStateToDisk();
 
     CCoinsView* coins_view = WITH_LOCK(cs_main, return &ChainstateActive().CoinsDB());
-    if (GetUTXOStats(coins_view, stats)) {
+    if (GetUTXOStats(coins_view, stats, RpcInterruptionPoint)) {
         ret.pushKV("height", (int64_t)stats.nHeight);
         ret.pushKV("bestblock", stats.hashBlock.GetHex());
         ret.pushKV("transactions", (int64_t)stats.nTransactions);
@@ -1362,7 +1329,9 @@ UniValue getblockchaininfo(const JSONRPCRequest& request)
     BuriedForkDescPushBack(softforks, "eunospaya", consensusParams.EunosPayaHeight);
     BuriedForkDescPushBack(softforks, "fortcanning", consensusParams.FortCanningHeight);
     BuriedForkDescPushBack(softforks, "fortcanningmuseum", consensusParams.FortCanningMuseumHeight);
+    BuriedForkDescPushBack(softforks, "fortcanningpark", consensusParams.FortCanningParkHeight);
     BuriedForkDescPushBack(softforks, "fortcanninghill", consensusParams.FortCanningHillHeight);
+    BuriedForkDescPushBack(softforks, "greatworld", consensusParams.GreatWorldHeight);
     BIP9SoftForkDescPushBack(softforks, "testdummy", consensusParams, Consensus::DEPLOYMENT_TESTDUMMY);
     obj.pushKV("softforks",             softforks);
 
@@ -1912,8 +1881,15 @@ static UniValue getblockstats(const JSONRPCRequest& request)
 
         CAmount tx_total_out = 0;
         if (loop_outputs) {
-            for (const CTxOut& out : tx->vout) {
-                tx_total_out += out.nValue;
+            auto mintingOutputsStart = ~0u;
+            if (auto accountToUtxos = GetAccountToUtxosMsg(*tx)) {
+                mintingOutputsStart = accountToUtxos->mintingOutputsStart;
+            }
+            for (size_t i = 0; i < tx->vout.size(); ++i) {
+                const auto& out = tx->vout[i];
+                if (i < mintingOutputsStart) {
+                    tx_total_out += out.nValue;
+                }
                 utxo_size_inc += GetSerializeSize(out, PROTOCOL_VERSION) + PER_UTXO_OVERHEAD;
             }
         }
@@ -2064,7 +2040,7 @@ bool FindScriptPubKey(std::atomic<int>& scan_progress, const std::atomic<bool>& 
         Coin coin;
         if (!cursor->GetKey(key) || !cursor->GetValue(coin)) return false;
         if (++count % 8192 == 0) {
-            boost::this_thread::interruption_point();
+            RpcInterruptionPoint();
             if (should_abort) {
                 // allow to abort the scan via the abort reference
                 return false;
@@ -2343,7 +2319,6 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getmempooldescendants",  &getmempooldescendants,  {"txid","verbose"} },
     { "blockchain",         "getmempoolentry",        &getmempoolentry,        {"txid"} },
     { "blockchain",         "getmempoolinfo",         &getmempoolinfo,         {} },
-    { "blockchain",         "clearmempool",           &clearmempool,           {} },
     { "blockchain",         "getrawmempool",          &getrawmempool,          {"verbose"} },
     { "blockchain",         "gettxout",               &gettxout,               {"txid","n","include_mempool"} },
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        {} },

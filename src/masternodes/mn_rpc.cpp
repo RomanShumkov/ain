@@ -202,7 +202,8 @@ static CTransactionRef send(CTransactionRef tx, CTransactionRef optAuthTx) {
     return tx;
 }
 
-CWalletCoinsUnlocker::CWalletCoinsUnlocker(std::shared_ptr<CWallet> pwallet) : pwallet(std::move(pwallet)) {
+CWalletCoinsUnlocker::CWalletCoinsUnlocker(std::shared_ptr<CWallet> pwallet) : 
+    pwallet(std::move(pwallet)) {
 }
 
 CWalletCoinsUnlocker::~CWalletCoinsUnlocker() {
@@ -271,7 +272,7 @@ static std::vector<CTxIn> GetInputs(UniValue const& inputs) {
     return vin;
 }
 
-boost::optional<CScript> AmIFounder(CWallet* const pwallet) {
+std::optional<CScript> AmIFounder(CWallet* const pwallet) {
     for(auto const & script : Params().GetConsensus().foundationMembers) {
         if(IsMineCached(*pwallet, script) == ISMINE_SPENDABLE)
             return { script };
@@ -279,7 +280,7 @@ boost::optional<CScript> AmIFounder(CWallet* const pwallet) {
     return {};
 }
 
-static boost::optional<CTxIn> GetAuthInputOnly(CWalletCoinsUnlocker& pwallet, CTxDestination const& auth) {
+static std::optional<CTxIn> GetAuthInputOnly(CWalletCoinsUnlocker& pwallet, CTxDestination const& auth) {
 
     std::vector<COutput> vecOutputs;
     CCoinControl cctl;
@@ -345,7 +346,7 @@ static CTransactionRef CreateAuthTx(CWalletCoinsUnlocker& pwallet, std::set<CScr
     return fund(mtx, pwallet, {}, &coinControl), sign(mtx, pwallet, {});
 }
 
-static boost::optional<CTxIn> GetAnyFoundationAuthInput(CWalletCoinsUnlocker& pwallet) {
+static std::optional<CTxIn> GetAnyFoundationAuthInput(CWalletCoinsUnlocker& pwallet) {
     for (auto const & founderScript : Params().GetConsensus().foundationMembers) {
         if (IsMineCached(*pwallet, founderScript) == ISMINE_SPENDABLE) {
             CTxDestination destination;
@@ -378,7 +379,7 @@ std::vector<CTxIn> GetAuthInputsSmart(CWalletCoinsUnlocker& pwallet, int32_t txV
         }
         auto authInput = GetAuthInputOnly(pwallet, destination);
         if (authInput) {
-            result.push_back(authInput.get());
+            result.push_back(authInput.value());
         }
         else {
             notFoundYet.insert(auth);
@@ -393,13 +394,13 @@ std::vector<CTxIn> GetAuthInputsSmart(CWalletCoinsUnlocker& pwallet, int32_t txV
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Need foundation member authorization");
             }
         } else {
-            auths.insert(anyFounder.get());
+            auths.insert(anyFounder.value());
             auto authInput = GetAnyFoundationAuthInput(pwallet);
             if (authInput) {
-                result.push_back(authInput.get());
+                result.push_back(authInput.value());
             }
             else {
-                notFoundYet.insert(anyFounder.get());
+                notFoundYet.insert(anyFounder.value());
             }
         }
     }
@@ -454,7 +455,7 @@ UniValue setgov(const JSONRPCRequest& request) {
     auto pwallet = GetWallet(request);
 
     RPCHelpMan{"setgov",
-               "\nSet special 'governance' variables:: ICX_TAKERFEE_PER_BTC, LP_LOAN_TOKEN_SPLITS, LP_SPLITS, ORACLE_BLOCK_INTERVAL, ORACLE_DEVIATION\n",
+               "\nSet special 'governance' variables:: ATTRIBUTES, ICX_TAKERFEE_PER_BTC, LP_LOAN_TOKEN_SPLITS, LP_SPLITS, ORACLE_BLOCK_INTERVAL, ORACLE_DEVIATION\n",
                {
                     {"variables", RPCArg::Type::OBJ, RPCArg::Optional::NO, "Object with variables",
                         {
@@ -492,9 +493,13 @@ UniValue setgov(const JSONRPCRequest& request) {
     if (request.params.size() > 0 && request.params[0].isObject()) {
         for (const std::string& name : request.params[0].getKeys()) {
             auto gv = GovVariable::Create(name);
-            if(!gv)
+            if (!gv) {
                 throw JSONRPCError(RPC_INVALID_REQUEST, "Variable " + name + " not registered");
-            gv->Import(request.params[0][name]);
+            }
+            const auto res = gv->Import(request.params[0][name]);
+            if (!res) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, res.msg);
+            }
             varStream << name << *gv;
         }
     }
@@ -538,7 +543,7 @@ UniValue setgovheight(const JSONRPCRequest& request) {
     auto pwallet = GetWallet(request);
 
     RPCHelpMan{"setgovheight",
-               "\nChange governance variable at height: ICX_TAKERFEE_PER_BTC, LP_LOAN_TOKEN_SPLITS, LP_SPLITS, ORACLE_DEVIATION\n",
+               "\nChange governance variable at height: ATTRIBUTES, ICX_TAKERFEE_PER_BTC, LP_LOAN_TOKEN_SPLITS, LP_SPLITS, ORACLE_DEVIATION\n",
                {
                        {"variables", RPCArg::Type::OBJ, RPCArg::Optional::NO, "Object with variable",
                         {
@@ -581,7 +586,10 @@ UniValue setgovheight(const JSONRPCRequest& request) {
         if (!gv) {
             throw JSONRPCError(RPC_INVALID_REQUEST, "Variable " + name + " not registered");
         }
-        gv->Import(request.params[0][name]);
+        const auto res = gv->Import(request.params[0][name]);
+        if (!res) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, res.msg);
+        }
         varStream << name << *gv;
     } else {
         throw JSONRPCError(RPC_INVALID_REQUEST, "No Governance variable provided.");
@@ -628,7 +636,7 @@ UniValue setgovheight(const JSONRPCRequest& request) {
 UniValue getgov(const JSONRPCRequest& request) {
     RPCHelpMan{"getgov",
                "\nReturns information about governance variable:\n"
-               "ICX_TAKERFEE_PER_BTC, LP_DAILY_LOAN_TOKEN_REWARD, LP_LOAN_TOKEN_SPLITS, LP_DAILY_DFI_REWARD,\n"
+               "ATTRIBUTES, ICX_TAKERFEE_PER_BTC, LP_DAILY_LOAN_TOKEN_REWARD, LP_LOAN_TOKEN_SPLITS, LP_DAILY_DFI_REWARD,\n"
                "LOAN_LIQUIDATION_PENALTY, LP_SPLITS, ORACLE_BLOCK_INTERVAL, ORACLE_DEVIATION\n",
                {
                        {"name", RPCArg::Type::STR, RPCArg::Optional::NO,
@@ -669,7 +677,7 @@ UniValue listgovs(const JSONRPCRequest& request) {
     }.Check(request);
 
     std::vector<std::string> vars{"ICX_TAKERFEE_PER_BTC", "LP_DAILY_LOAN_TOKEN_REWARD", "LP_LOAN_TOKEN_SPLITS", "LP_DAILY_DFI_REWARD",
-                                  "LOAN_LIQUIDATION_PENALTY", "LP_SPLITS", "ORACLE_BLOCK_INTERVAL", "ORACLE_DEVIATION"};
+                                  "LOAN_LIQUIDATION_PENALTY", "LP_SPLITS", "ORACLE_BLOCK_INTERVAL", "ORACLE_DEVIATION", "ATTRIBUTES"};
 
     LOCK(cs_main);
 
@@ -697,6 +705,7 @@ UniValue listgovs(const JSONRPCRequest& request) {
 
     return result;
 }
+
 
 UniValue isappliedcustomtx(const JSONRPCRequest& request) {
     RPCHelpMan{"isappliedcustomtx",
@@ -756,6 +765,90 @@ UniValue isappliedcustomtx(const JSONRPCRequest& request) {
     return result;
 }
 
+
+static std::string GetContractCall(const std::string& str) {
+    if (str == "DFIP2201") {
+        return "dbtcdfiswap";
+    }
+
+    return str;
+}
+
+UniValue listsmartcontracts(const JSONRPCRequest& request) {
+    RPCHelpMan{"listsmartcontracts",
+               "\nReturns information on smart contracts\n",
+               {
+               },
+               RPCResult{
+                       "(array) JSON array with smart contract information\n"
+                       "\"name\":\"name\"         smart contract name\n"
+                       "\"address\":\"address\"   smart contract address\n"
+                       "\"token id\":x.xxxxxxxx   smart contract balance per token\n"
+               },
+               RPCExamples{
+                       HelpExampleCli("listsmartcontracts", "")
+                       + HelpExampleRpc("listsmartcontracts", "")
+               },
+    }.Check(request);
+
+    UniValue arr(UniValue::VARR);
+    for (const auto& item : Params().GetConsensus().smartContracts) {
+        UniValue obj(UniValue::VOBJ);
+        CTxDestination dest;
+        ExtractDestination(item.second, dest);
+        obj.pushKV("name", item.first);
+        obj.pushKV("call", GetContractCall(item.first));
+        obj.pushKV("address", EncodeDestination(dest));
+
+        pcustomcsview->ForEachBalance([&](CScript const & owner, CTokenAmount balance) {
+            if (owner != item.second) {
+                return false;
+            }
+            obj.pushKV(balance.nTokenId.ToString(), ValueFromAmount(balance.nValue));
+            return true;
+        }, BalanceKey{item.second, {0}});
+
+        arr.push_back(obj);
+    }
+    return arr;
+}
+
+
+static UniValue clearmempool(const JSONRPCRequest& request)
+{
+    auto pwallet = GetWallet(request);
+
+    RPCHelpMan("clearmempool",
+               "\nClears the memory pool and returns a list of the removed transactions.\n",
+               {},
+               RPCResult{
+                       "[                     (json array of string)\n"
+                       "  \"hash\"              (string) The transaction hash\n"
+                       "  ,...\n"
+                       "]\n"
+               },
+               RPCExamples{
+                       HelpExampleCli("clearmempool", "")
+                       + HelpExampleRpc("clearmempool", "")
+               }
+    ).Check(request);
+
+    std::vector<uint256> vtxid;
+    mempool.queryHashes(vtxid);
+
+    UniValue removed(UniValue::VARR);
+    for (const uint256& hash : vtxid)
+        removed.push_back(hash.ToString());
+
+    LOCK(cs_main);
+    mempool.clear();
+
+    std::vector<uint256> vHashOut;
+    pwallet->ZapSelectTx(vtxid, vHashOut);
+
+    return removed;
+}
+
 static const CRPCCommand commands[] =
 {
 //  category        name                     actor (function)        params
@@ -765,6 +858,8 @@ static const CRPCCommand commands[] =
     {"blockchain",  "getgov",                &getgov,                {"name"}},
     {"blockchain",  "listgovs",              &listgovs,              {""}},
     {"blockchain",  "isappliedcustomtx",     &isappliedcustomtx,     {"txid", "blockHeight"}},
+    {"blockchain",  "listsmartcontracts",    &listsmartcontracts,    {}},
+    {"blockchain",  "clearmempool",          &clearmempool,          {} },
 };
 
 void RegisterMNBlockchainRPCCommands(CRPCTable& tableRPC) {

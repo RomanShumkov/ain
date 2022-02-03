@@ -29,9 +29,10 @@
 #include "BRMerkleBlock.h"
 #include "BRAddress.h"
 #include "BRInt.h"
+
 #include <stddef.h>
 #include <inttypes.h>
-#include <boost/thread.hpp>
+#include <mutex>
 
 /// define logs
 #define console_peer_log(peer, ...) { \
@@ -84,7 +85,7 @@
 
 extern char const * spv_logfilename;
 extern int spv_log2console;
-extern boost::mutex log_mutex;
+extern std::mutex log_mutex;
 
 #ifndef INET6_ADDRSTRLEN // defined in netinet/in.h
 #define INET6_ADDRSTRLEN 46
@@ -127,6 +128,9 @@ extern boost::mutex log_mutex;
 #define REJECT_NONSTANDARD 0x40 // not mined/relayed because it is "non-standard" (type or version unknown by server)
 #define REJECT_DUST        0x41 // one or more output amounts are below the 'dust' threshold
 #define REJECT_LOWFEE      0x42 // transaction does not have enough fee/priority to be relayed or mined
+
+#define BR_PROTOCOL_VERSION   70013
+#define BR_MIN_PROTO_VERSION  70002 // peers earlier than this protocol version not supported (need v0.9 txFee relay rules)
 
 typedef enum {
     BRPeerStatusDisconnected = 0,

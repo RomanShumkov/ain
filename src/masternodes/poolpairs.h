@@ -127,10 +127,10 @@ public:
     Res AddLiquidity(CAmount amountA, CAmount amountB, std::function<Res(CAmount)> onMint, bool slippageProtection = false);
     Res RemoveLiquidity(CAmount liqAmount, std::function<Res(CAmount, CAmount)> onReclaim);
 
-    Res Swap(CTokenAmount in, PoolPrice const & maxPrice, std::function<Res(CTokenAmount const &)> onTransfer, int height = INT_MAX);
+    Res Swap(CTokenAmount in, CAmount dexfeeInPct, PoolPrice const & maxPrice, std::function<Res(CTokenAmount const &, CTokenAmount const &)> onTransfer, int height = INT_MAX);
 
 private:
-    CAmount slopeSwap(CAmount unswapped, CAmount & poolFrom, CAmount & poolTo, bool postBayfrontGardens = false);
+    CAmount slopeSwap(CAmount unswapped, CAmount & poolFrom, CAmount & poolTo, int height);
 
     inline void ioProofer() const { // Maybe it's more reasonable to use unsigned everywhere, but for basic CAmount compatibility
         if (reserveA < 0 || reserveB < 0 ||
@@ -211,8 +211,8 @@ public:
     Res SetPoolPair(const DCT_ID &poolId, uint32_t height, CPoolPair const & pool);
     Res UpdatePoolPair(DCT_ID const & poolId, uint32_t height, bool status, CAmount const & commission, CScript const & ownerAddress, CBalances const & rewards);
 
-    boost::optional<CPoolPair> GetPoolPair(const DCT_ID &poolId) const;
-    boost::optional<std::pair<DCT_ID, CPoolPair> > GetPoolPair(DCT_ID const & tokenA, DCT_ID const & tokenB) const;
+    std::optional<CPoolPair> GetPoolPair(const DCT_ID &poolId) const;
+    std::optional<std::pair<DCT_ID, CPoolPair> > GetPoolPair(DCT_ID const & tokenA, DCT_ID const & tokenB) const;
 
     void ForEachPoolId(std::function<bool(DCT_ID const &)> callback, DCT_ID const & start = DCT_ID{0});
     void ForEachPoolPair(std::function<bool(DCT_ID const &, CPoolPair)> callback, DCT_ID const & start = DCT_ID{0});
@@ -221,7 +221,7 @@ public:
     Res SetShare(DCT_ID const & poolId, CScript const & provider, uint32_t height);
     Res DelShare(DCT_ID const & poolId, CScript const & provider);
 
-    boost::optional<uint32_t> GetShare(DCT_ID const & poolId, CScript const & provider);
+    std::optional<uint32_t> GetShare(DCT_ID const & poolId, CScript const & provider);
 
     void CalculatePoolRewards(DCT_ID const & poolId, std::function<CAmount()> onLiquidity, uint32_t begin, uint32_t end, std::function<void(RewardType, CTokenAmount, uint32_t)> onReward);
 
@@ -230,6 +230,9 @@ public:
     Res SetRewardPct(DCT_ID const & poolId, uint32_t height, CAmount rewardPct);
     Res SetRewardLoanPct(DCT_ID const & poolId, uint32_t height, CAmount rewardLoanPct);
     bool HasPoolPair(DCT_ID const & poolId) const;
+
+    Res SetDexFeePct(DCT_ID poolId, DCT_ID tokenId, CAmount feePct);
+    CAmount GetDexFeePct(DCT_ID poolId, DCT_ID tokenId) const;
 
     std::pair<CAmount, CAmount> UpdatePoolRewards(std::function<CTokenAmount(CScript const &, DCT_ID)> onGetBalance, std::function<Res(CScript const &, CScript const &, CTokenAmount)> onTransfer, int nHeight = 0);
 
@@ -248,6 +251,7 @@ public:
     struct ByDailyLoanReward{ static constexpr uint8_t prefix() { return 'q'; } };
     struct ByRewardLoanPct  { static constexpr uint8_t prefix() { return 'U'; } };
     struct ByPoolLoanReward { static constexpr uint8_t prefix() { return 'W'; } };
+    struct ByTokenDexFeePct { static constexpr uint8_t prefix() { return 'l'; } };
 };
 
 struct CLiquidityMessage {
