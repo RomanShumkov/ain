@@ -69,6 +69,7 @@ EXPECTED_BOOST_INCLUDES=(
     boost/signals2/signal.hpp
     boost/test/unit_test.hpp
     boost/multiprecision/cpp_int.hpp
+    boost/circular_buffer.hpp
 )
 
 for BOOST_INCLUDE in $(git grep '^#include <boost/' -- "*.cpp" "*.h" | cut -f2 -d: | cut -f2 -d'<' | cut -f1 -d'>' | sort -u); do
