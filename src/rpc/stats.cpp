@@ -5,67 +5,61 @@
 
 bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_t payload)
 {
-    UniValue data(UniValue::VOBJ),
-            latencyObj(UniValue::VOBJ),
-            payloadObj(UniValue::VOBJ),
-            history(UniValue::VARR);
+    MinMaxStatEntry latencyEntry,
+                    payloadEntry;
 
-    int64_t min_latency = latency,
-            avg_latency = latency,
-            max_latency = latency,
-            min_payload = payload,
-            avg_payload = payload,
-            max_payload = payload,
-            count       = 1,
-            timestamp   = GetSystemTimeInSeconds();
+    std::vector<StatHistoryEntry> history;
+    StatHistoryEntry historyEntry;
 
-    UniValue stats = statsRPC.get(name);
-    if (!stats.empty()) {
-        count = stats["count"].get_int() + 1;
+    int64_t  min_latency = latency,
+             avg_latency = latency,
+             max_latency = latency,
+             min_payload = payload,
+             avg_payload = payload,
+             max_payload = payload,
+             count       = 1,
+             timestamp   = GetSystemTimeInSeconds();
 
-        latencyObj = stats["latency"].get_obj();
-        min_latency = std::min(latency, latencyObj["min"].get_int64());
-        max_latency = std::max(latency, latencyObj["max"].get_int64());
-        avg_latency = latencyObj["avg"].get_int() + (latency - latencyObj["avg"].get_int()) / count;
+    RPCStats stats;
+    auto it = map.find(name);
+    if (it != map.end()) {
+        stats = it->second;
 
-        payloadObj = stats["payload"].get_obj();
-        min_payload = std::min(payload, payloadObj["min"].get_int64());
-        max_payload = std::max(payload, payloadObj["max"].get_int64());
-        avg_payload = payloadObj["avg"].get_int() + (payload - payloadObj["avg"].get_int()) / count;
+        count = stats.count + 1;
 
-        UniValue historyArr = stats["history"].get_array();
+        latencyEntry = stats.latency;
+        min_latency  = std::min(latency, latencyEntry.min);
+        max_latency  = std::max(latency, latencyEntry.max);
+        avg_latency  = latencyEntry.avg + (latency - latencyEntry.avg) / count;
+
+        payloadEntry = stats.payload;
+        min_payload  = std::min(payload, payloadEntry.min);
+        max_payload  = std::max(payload, payloadEntry.max);
+        avg_payload  = payloadEntry.avg + (payload - payloadEntry.avg) / count;
+
         size_t i = 0;
-        if (historyArr.size() == RPC_STATS_HISTORY_SIZE) {
+        if (stats.history.size() == RPC_STATS_HISTORY_SIZE) {
             i++;
         }
-        for (; i < historyArr.size(); i++) {
-            history.push_back(historyArr[i]);
+        for (; i < stats.history.size(); i++) {
+            history.push_back(stats.history[i]);
         }
     }
 
-    data.pushKV("name", name);
+    latencyEntry.min = min_latency;
+    latencyEntry.avg = avg_latency;
+    latencyEntry.max = max_latency;
 
-    latencyObj.pushKV("min", min_latency);
-    latencyObj.pushKV("avg", avg_latency);
-    latencyObj.pushKV("max", max_latency);
-    data.pushKV("latency", latencyObj);
+    payloadEntry.min = min_payload;
+    payloadEntry.avg = avg_payload;
+    payloadEntry.max = max_payload;
 
-    payloadObj.pushKV("min", min_payload);
-    payloadObj.pushKV("avg", avg_payload);
-    payloadObj.pushKV("max", max_payload);
-    data.pushKV("payload", payloadObj);
+    historyEntry.timestamp = timestamp;
+    historyEntry.latency   = latency;
+    historyEntry.payload   = payload;
+    history.push_back(historyEntry);
 
-    data.pushKV("count", count);
-    data.pushKV("lastUsedTime", timestamp);
-
-    UniValue historyObj(UniValue::VOBJ);
-    historyObj.pushKV("timestamp", timestamp);
-    historyObj.pushKV("latency", latency);
-    historyObj.pushKV("payload", payload);
-    history.push_back(historyObj);
-    data.pushKV("history", history);
-
-    return map.pushKV(name, data);
+    map[name] = { name, timestamp, latencyEntry, payloadEntry, count, history };
 }
 
 static UniValue getrpcstats(const JSONRPCRequest& request)
@@ -103,7 +97,7 @@ static UniValue getrpcstats(const JSONRPCRequest& request)
     }
 
     auto command = request.params[0].get_str();
-    return statsRPC.get(command);
+    return statsRPC.get(command).toJSON();
 }
 
 static UniValue listrpcstats(const JSONRPCRequest& request)
@@ -141,8 +135,8 @@ static UniValue listrpcstats(const JSONRPCRequest& request)
     }
 
     UniValue ret(UniValue::VARR);
-    for (const auto& key : statsRPC.getKeys()) {
-        ret.push_back(statsRPC.get(key));
+    for (const auto &[_, stats] : statsRPC.getMap()) {
+        ret.push_back(stats.toJSON());
     }
     return ret;
 }
