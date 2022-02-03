@@ -7,6 +7,8 @@
 #include <util/time.h>
 #include <util/system.h>
 
+#include <boost/circular_buffer.hpp>
+
 const char * const DEFAULT_STATSFILE = "stats.log";
 static const bool DEFAULT_RPC_STATS = false;
 static const int RPC_STATS_HISTORY_SIZE = 5;
@@ -29,7 +31,7 @@ struct RPCStats {
     MinMaxStatEntry latency;
     MinMaxStatEntry payload;
     int64_t count;
-    std::vector<StatHistoryEntry> history;
+    boost::circular_buffer<StatHistoryEntry> history;
 
     UniValue toJSON() const {
         if (count == 0) return UniValue::VOBJ;
@@ -66,7 +68,7 @@ struct RPCStats {
 
     static RPCStats fromJSON(UniValue json) {
         RPCStats stats;
-        std::vector<StatHistoryEntry> history;
+        boost::circular_buffer<StatHistoryEntry> history(RPC_STATS_HISTORY_SIZE);
         MinMaxStatEntry latencyEntry,
                         payloadEntry;
 

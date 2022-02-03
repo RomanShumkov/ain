@@ -8,7 +8,7 @@ bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_
     MinMaxStatEntry latencyEntry,
                     payloadEntry;
 
-    std::vector<StatHistoryEntry> history;
+    boost::circular_buffer<StatHistoryEntry> history(RPC_STATS_HISTORY_SIZE);
     StatHistoryEntry historyEntry;
 
     int64_t  min_latency = latency,
@@ -37,13 +37,7 @@ bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_
         max_payload  = std::max(payload, payloadEntry.max);
         avg_payload  = payloadEntry.avg + (payload - payloadEntry.avg) / count;
 
-        size_t i = 0;
-        if (stats.history.size() == RPC_STATS_HISTORY_SIZE) {
-            i++;
-        }
-        for (; i < stats.history.size(); i++) {
-            history.push_back(stats.history[i]);
-        }
+        history = stats.history;
     }
 
     latencyEntry.min = min_latency;
