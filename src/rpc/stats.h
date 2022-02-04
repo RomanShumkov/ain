@@ -56,7 +56,7 @@ class CRPCStats
 private:
     std::map<std::string, RPCStats> map;
 public:
-    bool add(const std::string& name, const int64_t latency, const int64_t payload);
+    void add(const std::string& name, const int64_t latency, const int64_t payload);
 
     std::optional<RPCStats> get(const std::string& name) {
         auto it = map.find(name);

@@ -73,7 +73,7 @@ RPCStats RPCStats::fromJSON(UniValue json) {
     return stats;
 }
 
-bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_t payload)
+void CRPCStats::add(const std::string& name, const int64_t latency, const int64_t payload)
 {
     auto stats = CRPCStats::get(name);
     if (stats) {
