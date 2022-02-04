@@ -4,8 +4,6 @@
 #include <rpc/util.h>
 
 UniValue RPCStats::toJSON() const {
-    if (count == 0) return UniValue::VOBJ;
-
     UniValue stats(UniValue::VOBJ),
              latencyObj(UniValue::VOBJ),
              payloadObj(UniValue::VOBJ),
@@ -77,26 +75,25 @@ RPCStats RPCStats::fromJSON(UniValue json) {
 
 bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_t payload)
 {
-    RPCStats stats(name, latency, payload);
-
-    auto it = map.find(name);
-    if (it != map.end()) {
-        stats = it->second;
-        stats.count++;
-        stats.lastUsedTime = GetSystemTimeInSeconds();
-        stats.latency = {
-            std::min(latency, stats.latency.min),
-            stats.latency.avg + (latency - stats.latency.avg) / stats.count,
-            std::max(latency, stats.latency.max)
+    auto stats = CRPCStats::get(name);
+    if (stats) {
+        stats->count++;
+        stats->lastUsedTime = GetSystemTimeInSeconds();
+        stats->latency = {
+            std::min(latency, stats->latency.min),
+            stats->latency.avg + (latency - stats->latency.avg) / stats->count,
+            std::max(latency, stats->latency.max)
         };
-        stats.payload = {
-            std::min(payload, stats.payload.min),
-            stats.payload.avg + (payload - stats.payload.avg) / stats.count,
-            std::max(payload, stats.payload.max)
+        stats->payload = {
+            std::min(payload, stats->payload.min),
+            stats->payload.avg + (payload - stats->payload.avg) / stats->count,
+            std::max(payload, stats->payload.max)
         };
+    } else {
+        stats = { name, latency, payload };
     }
-    stats.history.push_back({ stats.lastUsedTime, latency, payload });
-    map[name] = stats;
+    stats->history.push_back({ stats->lastUsedTime, latency, payload });
+    map[name] = *stats;
 }
 
 static UniValue getrpcstats(const JSONRPCRequest& request)
@@ -134,10 +131,11 @@ static UniValue getrpcstats(const JSONRPCRequest& request)
     }
 
     auto command = request.params[0].get_str();
-    if (!statsRPC.containsKey(command)) {
+    auto stats = statsRPC.get(command);
+    if (!stats) {
         throw JSONRPCError(RPC_INVALID_PARAMS, "No stats for this command.");
     }
-    return statsRPC.get(command).toJSON();
+    return stats->toJSON();
 }
 
 static UniValue listrpcstats(const JSONRPCRequest& request)

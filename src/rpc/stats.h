@@ -15,18 +15,12 @@ static const int RPC_STATS_HISTORY_SIZE = 5;
 
 struct MinMaxStatEntry {
     int64_t min;
-    int64_t max;
     int64_t avg;
+    int64_t max;
 
     MinMaxStatEntry() = default;
-    MinMaxStatEntry(int64_t val) {
-        min = max = avg = val;
-    }
-    MinMaxStatEntry(int64_t _min, int64_t _avg, int64_t _max) {
-        min = _min;
-        avg = _avg;
-        max = _max;
-    }
+    MinMaxStatEntry(int64_t val) : MinMaxStatEntry(val, val, val) {};
+    MinMaxStatEntry(int64_t min, int64_t avg, int64_t max) : min(min), avg(avg), max(max) {};
 };
 
 struct StatHistoryEntry {
@@ -43,18 +37,12 @@ struct RPCStats {
     int64_t count;
     boost::circular_buffer<StatHistoryEntry> history;
 
-    RPCStats() {
-        history = boost::circular_buffer<StatHistoryEntry>(RPC_STATS_HISTORY_SIZE);
-    }
+    RPCStats() : history(RPC_STATS_HISTORY_SIZE) {}
 
-    RPCStats(std::string _name, int64_t _latency, int64_t _payload) {
-        name = _name;
+    RPCStats(std::string name, int64_t latency, int64_t payload) : name(name), latency(latency), payload(payload), history(RPC_STATS_HISTORY_SIZE) {
         lastUsedTime = GetSystemTimeInSeconds();
-        latency = MinMaxStatEntry(_latency);
-        payload = MinMaxStatEntry(_payload);
         count = 1;
-        history = boost::circular_buffer<StatHistoryEntry>(RPC_STATS_HISTORY_SIZE);
-    }
+    };
 
     UniValue toJSON() const;
     static RPCStats fromJSON(UniValue json);
@@ -70,9 +58,14 @@ private:
 public:
     bool add(const std::string& name, const int64_t latency, const int64_t payload);
 
-    RPCStats get(const std::string& name) { return map[name]; };
-    bool containsKey(const std::string& key) { return map.find(key) != map.end(); };
-    std::map<std::string, RPCStats> getMap() { return map; };
+    std::optional<RPCStats> get(const std::string& name) {
+        auto it = map.find(name);
+        if (it == map.end()) {
+            return {};
+        }
+        return it->second;
+    };
+    std::map<std::string, RPCStats>& getMap() { return map; };
 
     void save() const {
         fs::path statsPath = GetDataDir() / DEFAULT_STATSFILE;
