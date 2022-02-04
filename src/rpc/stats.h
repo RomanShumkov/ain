@@ -17,6 +17,16 @@ struct MinMaxStatEntry {
     int64_t min;
     int64_t max;
     int64_t avg;
+
+    MinMaxStatEntry() = default;
+    MinMaxStatEntry(int64_t val) {
+        min = max = avg = val;
+    }
+    MinMaxStatEntry(int64_t _min, int64_t _avg, int64_t _max) {
+        min = _min;
+        avg = _avg;
+        max = _max;
+    }
 };
 
 struct StatHistoryEntry {
@@ -33,8 +43,21 @@ struct RPCStats {
     int64_t count;
     boost::circular_buffer<StatHistoryEntry> history;
 
-    static RPCStats fromJSON(UniValue json);
+    RPCStats() {
+        history = boost::circular_buffer<StatHistoryEntry>(RPC_STATS_HISTORY_SIZE);
+    }
+
+    RPCStats(std::string _name, int64_t _latency, int64_t _payload) {
+        name = _name;
+        lastUsedTime = GetSystemTimeInSeconds();
+        latency = MinMaxStatEntry(_latency);
+        payload = MinMaxStatEntry(_payload);
+        count = 1;
+        history = boost::circular_buffer<StatHistoryEntry>(RPC_STATS_HISTORY_SIZE);
+    }
+
     UniValue toJSON() const;
+    static RPCStats fromJSON(UniValue json);
 };
 
 /**
