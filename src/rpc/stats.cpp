@@ -3,6 +3,79 @@
 #include <rpc/server.h>
 #include <rpc/util.h>
 
+UniValue RPCStats::toJSON() const {
+    if (count == 0) return UniValue::VOBJ;
+
+    UniValue stats(UniValue::VOBJ),
+                latencyObj(UniValue::VOBJ),
+                payloadObj(UniValue::VOBJ),
+                historyArr(UniValue::VARR);
+
+    latencyObj.pushKV("min", latency.min);
+    latencyObj.pushKV("avg", latency.avg);
+    latencyObj.pushKV("max", latency.max);
+
+    payloadObj.pushKV("min", payload.min);
+    payloadObj.pushKV("avg", payload.avg);
+    payloadObj.pushKV("max", payload.max);
+
+    for (auto const &entry : history) {
+        UniValue historyObj(UniValue::VOBJ);
+        historyObj.pushKV("timestamp", entry.timestamp);
+        historyObj.pushKV("latency", entry.latency);
+        historyObj.pushKV("payload", entry.payload);
+        historyArr.push_back(historyObj);
+    }
+
+    stats.pushKV("name", name);
+    stats.pushKV("count", count);
+    stats.pushKV("lastUsedTime", lastUsedTime);
+    stats.pushKV("latency", latencyObj);
+    stats.pushKV("payload", payloadObj);
+    stats.pushKV("history", historyArr);
+    return stats;
+}
+
+RPCStats RPCStats::fromJSON(UniValue json) {
+    RPCStats stats;
+    boost::circular_buffer<StatHistoryEntry> history(RPC_STATS_HISTORY_SIZE);
+    MinMaxStatEntry latencyEntry,
+                    payloadEntry;
+
+    auto name = json["name"].get_str();
+    auto lastUsedTime = json["lastUsedTime"].get_int64();
+    auto count = json["count"].get_int64();
+
+    if (!json["latency"].isNull()) {
+        auto latencyObj  = json["latency"].get_obj();
+        latencyEntry.min = latencyObj["min"].get_int64();
+        latencyEntry.avg = latencyObj["avg"].get_int64();
+        latencyEntry.max = latencyObj["max"].get_int64();
+    }
+
+    if (!json["payload"].isNull()) {
+        auto payloadObj  = json["payload"].get_obj();
+        payloadEntry.min = payloadObj["min"].get_int64();
+        payloadEntry.avg = payloadObj["avg"].get_int64();
+        payloadEntry.max = payloadObj["max"].get_int64();
+    }
+
+    if (!json["history"].isNull()) {
+        auto historyArr = json["history"].get_array();
+        for (const auto &entry : historyArr.getValues()) {
+            auto historyObj = entry.get_obj();
+            StatHistoryEntry historyEntry;
+
+            historyEntry.timestamp = historyObj["timestamp"].get_int64();
+            historyEntry.latency   = historyObj["latency"].get_int64();
+            historyEntry.payload   = historyObj["payload"].get_int64();
+            history.push_back(historyEntry);
+        }
+    }
+
+    return { name, lastUsedTime, latencyEntry, payloadEntry, count, history };
+}
+
 bool CRPCStats::add(const std::string& name, const int64_t latency, const int64_t payload)
 {
     MinMaxStatEntry latencyEntry,
