@@ -38,6 +38,7 @@
 #include <policy/settings.h>
 #include <rpc/blockchain.h>
 #include <rpc/register.h>
+#include <rpc/stats.h>
 #include <rpc/server.h>
 #include <rpc/util.h>
 #include <scheduler.h>
@@ -2073,6 +2074,8 @@ bool AppInitMain(InitInterfaces& interfaces)
             threadStaker(stakersParams, chainparams);
         });
     }
+
+    if (gArgs.GetBoolArg("-rpcstats", DEFAULT_RPC_STATS)) DEFAULT_RPC_STATS = true;
 
     return true;
 }

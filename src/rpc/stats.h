@@ -10,8 +10,8 @@
 #include <boost/circular_buffer.hpp>
 
 const char * const DEFAULT_STATSFILE = "stats.log";
-static const bool DEFAULT_RPC_STATS = false;
-static const int RPC_STATS_HISTORY_SIZE = 5;
+static const uint8_t RPC_STATS_HISTORY_SIZE = 5;
+bool DEFAULT_RPC_STATS = false;
 
 struct MinMaxStatEntry {
     int64_t min;

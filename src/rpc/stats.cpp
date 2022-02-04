@@ -126,7 +126,7 @@ static UniValue getrpcstats(const JSONRPCRequest& request)
         },
     }.Check(request);
 
-    if (!gArgs.GetBoolArg("-rpcstats", DEFAULT_RPC_STATS)) {
+    if (!DEFAULT_RPC_STATS) {
         throw JSONRPCError(RPC_INVALID_REQUEST, "Rpcstats flag is not set. Activate it by restarting node with -rpcstats.");
     }
 
@@ -168,7 +168,7 @@ static UniValue listrpcstats(const JSONRPCRequest& request)
         },
     }.Check(request);
 
-    if (!gArgs.GetBoolArg("-rpcstats", DEFAULT_RPC_STATS)) {
+    if (!DEFAULT_RPC_STATS) {
         throw JSONRPCError(RPC_INVALID_REQUEST, "Rpcstats flag is not set. Activate it by restarting node with -rpcstats.");
     }
 
