@@ -134,6 +134,9 @@ static UniValue getrpcstats(const JSONRPCRequest& request)
     }
 
     auto command = request.params[0].get_str();
+    if (!statsRPC.containsKey(command)) {
+        throw JSONRPCError(RPC_INVALID_PARAMS, "No stats for this command.");
+    }
     return statsRPC.get(command).toJSON();
 }
 

@@ -71,6 +71,7 @@ public:
     bool add(const std::string& name, const int64_t latency, const int64_t payload);
 
     RPCStats get(const std::string& name) { return map[name]; };
+    bool containsKey(const std::string& key) { return map.find(key) != map.end(); };
     std::map<std::string, RPCStats> getMap() { return map; };
 
     void save() const {

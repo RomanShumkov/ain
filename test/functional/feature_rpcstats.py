@@ -52,6 +52,12 @@ class RPCstats(DefiTestFramework):
         assert_equal(getrpcstats["history"][0], historyEntry2)
 
         try:
+            self.nodes[0].getrpcstats("WRONGCMD")
+        except JSONRPCException as e:
+            errorString = e.error['message']
+        assert("No stats for this command." in errorString)
+
+        try:
             self.nodes[1].getrpcstats("listunspent")
         except JSONRPCException as e:
             errorString = e.error['message']
