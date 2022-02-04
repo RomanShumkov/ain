@@ -5,8 +5,9 @@
 # file LICENSE or http://www.opensource.org/licenses/mit-license.php.
 """Test RPC stats."""
 
-from test_framework.test_framework import DefiTestFramework
+import time
 
+from test_framework.test_framework import DefiTestFramework
 from test_framework.util import (
     assert_equal,
 )
@@ -28,6 +29,7 @@ class RPCstats(DefiTestFramework):
         self.nodes[0].getnewaddress("", "legacy")
 
         self.nodes[0].listunspent()
+        time.sleep(1) # sleep to get different timestamp
         self.nodes[0].listunspent()
 
         listrpcstats = self.nodes[0].listrpcstats()
@@ -37,6 +39,17 @@ class RPCstats(DefiTestFramework):
         getrpcstats = self.nodes[0].getrpcstats("listunspent")
         assert_equal(getrpcstats["name"], "listunspent")
         assert_equal(getrpcstats["count"], 2)
+
+        # test history's circular buffer of 5 elements
+        [historyEntry1, historyEntry2] = getrpcstats["history"]
+        for _ in range(0, 4):
+            time.sleep(1)
+            self.nodes[0].listunspent()
+
+        getrpcstats = self.nodes[0].getrpcstats("listunspent")
+        assert_equal(getrpcstats["count"], 6)
+        assert(historyEntry1 not in getrpcstats["history"])
+        assert_equal(getrpcstats["history"][0], historyEntry2)
 
         try:
             self.nodes[1].getrpcstats("listunspent")
