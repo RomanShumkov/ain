@@ -234,7 +234,7 @@ static bool HTTPReq_JSONRPC(HTTPRequest* req, const std::string &)
         req->WriteHeader("Content-Type", "application/json");
         req->WriteReply(HTTP_OK, strReply);
 
-        if (DEFAULT_RPC_STATS) statsRPC.add(jreq.strMethod, GetTimeMillis() - time, strReply.length());
+        if (statsRPC.active) statsRPC.add(jreq.strMethod, GetTimeMillis() - time, strReply.length());
 
     } catch (const UniValue& objError) {
         JSONErrorReply(req, objError, jreq.id);
@@ -285,7 +285,7 @@ bool StartHTTPRPC()
     assert(eventBase);
     httpRPCTimerInterface = std::make_unique<HTTPRPCTimerInterface>(eventBase);
     RPCSetTimerInterface(httpRPCTimerInterface.get());
-    if (DEFAULT_RPC_STATS) statsRPC.load();
+    if (statsRPC.active) statsRPC.load();
     return true;
 }
 
@@ -305,7 +305,7 @@ void StopHTTPRPC()
         RPCUnsetTimerInterface(httpRPCTimerInterface.get());
         httpRPCTimerInterface.reset();
     }
-    if (DEFAULT_RPC_STATS) statsRPC.save();
+    if (statsRPC.active) statsRPC.save();
 }
 
 CRPCStats statsRPC;

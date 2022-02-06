@@ -11,7 +11,7 @@
 
 const char * const DEFAULT_STATSFILE = "stats.log";
 static const uint8_t RPC_STATS_HISTORY_SIZE = 5;
-bool DEFAULT_RPC_STATS = false;
+const bool DEFAULT_RPC_STATS = false;
 
 struct MinMaxStatEntry {
     int64_t min;
@@ -56,6 +56,8 @@ class CRPCStats
 private:
     std::map<std::string, RPCStats> map;
 public:
+    bool active{DEFAULT_RPC_STATS};
+
     void add(const std::string& name, const int64_t latency, const int64_t payload);
 
     std::optional<RPCStats> get(const std::string& name) {
