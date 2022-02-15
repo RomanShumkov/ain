@@ -4252,8 +4252,8 @@ bool CChainState::InvalidateBlock(CValidationState& state, const CChainParams& c
     {
         LOCK(cs_main);
         CBlockIndex* pcheckpoint = GetLastCheckpoint(chainparams.Checkpoints());
-        if (pcheckpoint && pindex->nHeight <= pcheckpoint->nHeight)
-            return state.Invalid(ValidationInvalidReason::BLOCK_CHECKPOINT, error("Cannot invalidate block prior last checkpoint height %d", pcheckpoint->nHeight), REJECT_CHECKPOINT, "");
+        // if (pcheckpoint && pindex->nHeight <= pcheckpoint->nHeight)
+            // return state.Invalid(ValidationInvalidReason::BLOCK_CHECKPOINT, error("Cannot invalidate block prior last checkpoint height %d", pcheckpoint->nHeight), REJECT_CHECKPOINT, "");
 
         for (const auto& entry : m_blockman.m_block_index) {
             CBlockIndex *candidate = entry.second;
