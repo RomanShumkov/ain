@@ -2573,7 +2573,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
             CHistoryWriters writers{paccountHistoryDB.get(), pburnHistoryDB.get(), pvaultHistoryDB.get()};
             const auto res = ApplyCustomTx(accountsView, view, tx, chainparams.GetConsensus(), pindex->nHeight, pindex->GetBlockTime(), i, &writers);
             if (!res.ok && (res.code & CustomTxErrCodes::Fatal)) {
-                if (pindex->nHeight >= chainparams.GetConsensus().EunosHeight) {
+                if (pindex->nHeight >= chainparams.GetConsensus().EunosHeight && false) {
                     return state.Invalid(ValidationInvalidReason::CONSENSUS,
                                          error("ConnectBlock(): ApplyCustomTx on %s failed with %s",
                                                tx.GetHash().ToString(), res.msg), REJECT_CUSTOMTX, "bad-custom-tx");
